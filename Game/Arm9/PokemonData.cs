@@ -44,6 +44,11 @@ public sealed partial class Pokemon
     private const int PersonalAbility1 = 0x18;
     private const int PersonalAbility2 = 0x19;
     private const int ParamPersonality = 0;
+    private const int ShinyPersonalityBits = 13;
+    private const uint BattleTypeNoWildItems = 0x81;
+    private const uint HeldItemRates = 0x020F0574;
+    private const int SpeciesParamItem1 = 0x10;
+    private const int SpeciesParamItem2 = 0x11;
     private const int ParamSpecies = 5;
     private const int ParamHeldItem = 6;
     private const int ParamOTID = 7;
@@ -860,6 +865,34 @@ public sealed partial class Pokemon
         return (byte)(value < ShinyThreshold ? 1 : 0);
     }
 
+    // OFFSET 0x02075E64
+    public static uint Pokemon_FindShinyPersonality(uint otID)
+    {
+        uint shinyValue = (((otID & 0xFFFF0000) >> 16) ^ (otID & 0xFFFF)) >> 3;
+        ushort low = (ushort)(MathUtil.LCRNG_Next() & 7);
+        ushort high = (ushort)(MathUtil.LCRNG_Next() & 7);
+        for (int i = 0; i < ShinyPersonalityBits; i++)
+        {
+            if ((HealthBar.FlagIndex(i) & shinyValue) != 0)
+            {
+                if ((MathUtil.LCRNG_Next() & 1) != 0)
+                {
+                    low = (ushort)(low | HealthBar.FlagIndex(i + 3));
+                }
+                else
+                {
+                    high = (ushort)(high | HealthBar.FlagIndex(i + 3));
+                }
+            }
+            else if ((MathUtil.LCRNG_Next() & 1) != 0)
+            {
+                low = (ushort)(low | HealthBar.FlagIndex(i + 3));
+                high = (ushort)(high | HealthBar.FlagIndex(i + 3));
+            }
+        }
+        return ((uint)high << 16) | low;
+    }
+
     // OFFSET 0x02075D74
     public static byte BoxPokemon_GetGender(BoxPokemon boxMon)
     {
@@ -996,6 +1029,59 @@ public sealed partial class Pokemon
         byte ppUps = (byte)BoxPokemon_GetValue(boxMon, ParamMove1PPUps + slot, null);
         byte pp = (byte)MoveTable.MoveTable_CalcMaxPP(move, ppUps);
         BoxPokemon_SetValue(boxMon, ParamMove1PP + slot, pp);
+    }
+
+    // OFFSET 0x02077F0C
+    public static void Pokemon_GiveHeldItem(Pokemon mon, uint battleType, int itemRates)
+    {
+        if ((battleType & BattleTypeNoWildItems) != 0)
+        {
+            return;
+        }
+        int random = MathUtil.LCRNG_Next() % 100;
+        ushort species = (ushort)Pokemon_GetValue(mon, ParamSpecies, null);
+        ushort form = (ushort)Pokemon_GetValue(mon, ParamForm, null);
+        ushort item1 = (ushort)SpeciesData.SpeciesData_GetFormValue(species, form, SpeciesParamItem1);
+        ushort item2 = (ushort)SpeciesData.SpeciesData_GetFormValue(species, form, SpeciesParamItem2);
+        if (item1 == item2 && item1 != 0)
+        {
+            Pokemon_SetValue(mon, ParamHeldItem, item1);
+            return;
+        }
+        ushort[] rates = RomData.Arm9U16((uint)(HeldItemRates + itemRates * 4), 2);
+        if (random < rates[0])
+        {
+            return;
+        }
+        if (random < rates[1])
+        {
+            Pokemon_SetValue(mon, ParamHeldItem, item1);
+            return;
+        }
+        Pokemon_SetValue(mon, ParamHeldItem, item2);
+    }
+
+    // OFFSET 0x02077344
+    public static void Pokemon_SwapMoveSlots(Pokemon mon, int slot1, int slot2)
+    {
+        BoxPokemon_SwapMoveSlots(mon.Box, slot1, slot2);
+    }
+
+    // OFFSET 0x0207734C
+    public static void BoxPokemon_SwapMoveSlots(BoxPokemon boxMon, int slot1, int slot2)
+    {
+        ushort move1 = (ushort)BoxPokemon_GetValue(boxMon, ParamMove1 + slot1, null);
+        byte pp1 = (byte)BoxPokemon_GetValue(boxMon, ParamMove1PP + slot1, null);
+        byte ppUps1 = (byte)BoxPokemon_GetValue(boxMon, ParamMove1PPUps + slot1, null);
+        ushort move2 = (ushort)BoxPokemon_GetValue(boxMon, ParamMove1 + slot2, null);
+        byte pp2 = (byte)BoxPokemon_GetValue(boxMon, ParamMove1PP + slot2, null);
+        byte ppUps2 = (byte)BoxPokemon_GetValue(boxMon, ParamMove1PPUps + slot2, null);
+        BoxPokemon_SetValue(boxMon, ParamMove1 + slot1, move2);
+        BoxPokemon_SetValue(boxMon, ParamMove1PP + slot1, pp2);
+        BoxPokemon_SetValue(boxMon, ParamMove1PPUps + slot1, ppUps2);
+        BoxPokemon_SetValue(boxMon, ParamMove1 + slot2, move1);
+        BoxPokemon_SetValue(boxMon, ParamMove1PP + slot2, pp1);
+        BoxPokemon_SetValue(boxMon, ParamMove1PPUps + slot2, ppUps1);
     }
 
     // OFFSET 0x020774C8

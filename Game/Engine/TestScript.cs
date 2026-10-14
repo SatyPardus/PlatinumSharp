@@ -2,9 +2,9 @@ using static PlatinumSharp.Game.Globals;
 
 namespace PlatinumSharp.Game;
 
-public sealed class TestScript
+public sealed partial class TestScript
 {
-    public const string StateDirectory = @"E:\Poketest\tools\tests\states";
+    public static readonly string StateDirectory = ProjectPaths.States;
     public const uint OpeningTemplate = 0x021D788C;
     public const uint ContinueTemplate = 0x021D0F70;
     public const uint NewSaveTemplate = 0x021D0F90;
@@ -39,7 +39,7 @@ public sealed class TestScript
     private const int MaxSameScript = 3;
     private const int ExploreObjectRange = 40;
     private const int DefaultExploreActions = 30;
-    private const string ExploreLogPath = @"E:\Poketest\tools\tests\task_log.txt";
+    private static readonly string ExploreLogPath = Environment.GetEnvironmentVariable("EXPLORE_LOG") ?? Path.Combine(ProjectPaths.Tests, "task_log.txt");
     private const int PushFrames = 24;
     private const int IdleTimeout = 180;
     private const int MaxDetours = 8;
@@ -47,7 +47,7 @@ public sealed class TestScript
     private const int TalkTimeout = 1500;
     private const int SaveResultFrames = 30;
     private const int TouchFrames = 6;
-    private const int AppTimeout = 1500;
+    private const int AppTimeout = 4000;
 
     public static Action<string>? Screenshot;
 
@@ -61,21 +61,89 @@ public sealed class TestScript
     private bool generatedStep;
     private int exploreActions;
     private int exploreHash;
+    private byte[]? exploreVars;
+    private static readonly int[] StepCounterVarBytes = { 0x74, 0x75, 0x94, 0x95 };
     private int exploreMap;
-    private readonly HashSet<(int Map, int LocalID)> talked = new();
-    private readonly HashSet<string> unreachable = new();
-    private readonly HashSet<(int Map, int Script)> triggered = new();
     private bool sawBusy;
     private int loggedStep = -1;
+    private string currentPosition = "";
     private int repeatedScript = -1;
     private readonly Dictionary<int, int> scriptStarts = new();
     private int loggedScript = -1;
+    private readonly ExplorerMemory memory = ExplorerMemory.Load();
+    private string? traceKey;
+    private int traceFile = -1;
     private string loggedText = "";
 
     public string LastDialogue { get; private set; } = "";
     private bool previousBusy;
     private int busyStarts;
-    private readonly Dictionary<(int Map, int X, int Z), int> warpVisits = new();
+    private readonly HashSet<int> volatileBytes = new();
+    private readonly Dictionary<int, List<byte>> byteHistory = new();
+    private const int MapBlockTiles = 32;
+
+    private static List<(int Map, int X, int Z)> NeighbourMaps(FieldSystem field, int map, int x, int z)
+    {
+        Dictionary<int, (int X, int Z, int Distance)> nearest = new();
+        MapMatrix? matrix = field.MapMatrix as MapMatrix;
+        if (matrix == null)
+        {
+            return new();
+        }
+        for (int blockZ = 0; blockZ < matrix.Height; blockZ++)
+        {
+            for (int blockX = 0; blockX < matrix.Width; blockX++)
+            {
+                if (MapMatrix.MapMatrix_GetMapHeaderIDAtCoords(matrix, blockX, blockZ) != map)
+                {
+                    continue;
+                }
+                foreach ((int dx, int dz) in new[] { (0, -1), (0, 1), (-1, 0), (1, 0) })
+                {
+                    int otherX = blockX + dx;
+                    int otherZ = blockZ + dz;
+                    if (otherX < 0 || otherZ < 0 || otherX >= matrix.Width || otherZ >= matrix.Height)
+                    {
+                        continue;
+                    }
+                    int neighbour = MapMatrix.MapMatrix_GetMapHeaderIDAtCoords(matrix, otherX, otherZ);
+                    if (neighbour == map || neighbour <= 0)
+                    {
+                        continue;
+                    }
+                    int edgeX = dx == 0 ? Math.Clamp(x, blockX * MapBlockTiles, blockX * MapBlockTiles + MapBlockTiles - 1) : (dx < 0 ? blockX * MapBlockTiles : blockX * MapBlockTiles + MapBlockTiles - 1);
+                    int edgeZ = dz == 0 ? Math.Clamp(z, blockZ * MapBlockTiles, blockZ * MapBlockTiles + MapBlockTiles - 1) : (dz < 0 ? blockZ * MapBlockTiles : blockZ * MapBlockTiles + MapBlockTiles - 1);
+                    int distance = Math.Abs(edgeX - x) + Math.Abs(edgeZ - z);
+                    if (!nearest.TryGetValue(neighbour, out var known) || distance < known.Distance)
+                    {
+                        nearest[neighbour] = (edgeX, edgeZ, distance);
+                    }
+                }
+            }
+        }
+        List<(int Map, int X, int Z)> result = new();
+        foreach (var entry in nearest)
+        {
+            result.Add((entry.Key, entry.Value.X, entry.Value.Z));
+        }
+        return result;
+    }
+
+    private static int MapAt(FieldSystem field, int tileX, int tileZ)
+    {
+        MapMatrix? matrix = field.MapMatrix as MapMatrix;
+        if (matrix == null || tileX < 0 || tileZ < 0)
+        {
+            return -1;
+        }
+        int blockX = tileX / MapBlockTiles;
+        int blockZ = tileZ / MapBlockTiles;
+        if (blockX >= matrix.Width || blockZ >= matrix.Height)
+        {
+            return -1;
+        }
+        return MapMatrix.MapMatrix_GetMapHeaderIDAtCoords(matrix, blockX, blockZ);
+    }
     private int pushFrames;
     private int navigateFrames;
     private int pathIndex;
@@ -103,6 +171,7 @@ public sealed class TestScript
             }
             steps.Add(line.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         }
+        ScriptTrace.Enabled = true;
     }
 
     public static string PrepareBackup(string? stateName)
@@ -243,6 +312,16 @@ public sealed class TestScript
         {
             Fail($"{label}\n  FAILED: no progress for {TalkTimeout} frames, busy with: {BusyReason()}");
         }
+        BattleSystem? battleSys = ActiveBattle();
+        if (battleSys != null)
+        {
+            return BattleKeys(battleSys);
+        }
+        if (battleTouching)
+        {
+            Input.Touching = false;
+            battleTouching = false;
+        }
         return Pulse();
     }
 
@@ -255,7 +334,14 @@ public sealed class TestScript
         else
         {
             stuckFrames = 0;
-            path = null;
+            if (path != null && pathIndex + 1 < path.Count && path[pathIndex + 1] == (x, z))
+            {
+                pathIndex++;
+            }
+            else
+            {
+                path = null;
+            }
         }
         lastX = x;
         lastZ = z;
@@ -275,23 +361,28 @@ public sealed class TestScript
         {
             path = TestWorld.FindPath(field, x, z, isGoal);
             pathIndex = 0;
+            if (path != null)
+            {
+                Log($"#   path to {description} ({path.Count - 1} steps): " + string.Join(" ", path.Take(16).Select(p => $"{p.X},{p.Z}")) + (path.Count > 16 ? " ... " + string.Join(" ", path.Skip(Math.Max(16, path.Count - 6)).Select(p => $"{p.X},{p.Z}")) : ""));
+            }
             if (path == null)
             {
                 Fail($"{label}\n  FAILED: no walkable route from ({x},{z}) to {description} on map {map}");
                 return 0;
             }
         }
-        if (path.Count < 2)
+        if (pathIndex + 1 >= path.Count)
         {
             return 0;
         }
-        Status = $"{label}\n  walking to {description}: at ({x},{z}) on map {map}, {path.Count - 1} tiles to go";
+        Status = $"{label}\n  walking to {description}: at ({x},{z}) on map {map}, {path.Count - 1 - pathIndex} tiles to go";
         navigateFrames++;
         if (navigateFrames > GotoTimeout)
         {
             Fail($"{label}\n  FAILED: could not reach {description}, stuck at ({x},{z})");
+            return 0;
         }
-        return TestWorld.KeyToward(x, z, path[1].X, path[1].Z);
+        return TestWorld.KeyToward(x, z, path[pathIndex + 1].X, path[pathIndex + 1].Z);
     }
 
     private static string KeyName(int key)
@@ -320,8 +411,9 @@ public sealed class TestScript
         if (generatedStep)
         {
             string reason = status.Contains("FAILED:") ? status.Substring(status.IndexOf("FAILED:") + 8) : status;
-            Log($"# gave up: {string.Join(' ', steps[index])} ({reason})");
-            unreachable.Add(string.Join(' ', steps[index]) + "@" + exploreMap);
+            Log($"# gave up: {string.Join(' ', steps[index])} ({reason}) {currentPosition}");
+            memory.Fails.Add(StateKey("fail:" + string.Join(' ', steps[index]) + "@" + exploreMap));
+            memory.Save();
             steps.RemoveAt(index);
             generatedStep = false;
             ResetStep();
@@ -344,7 +436,10 @@ public sealed class TestScript
             {
                 if (scriptManager.ScriptID != loggedScript)
                 {
+                    FinishTrace();
                     loggedScript = scriptManager.ScriptID;
+                    traceKey = $"{(int)fieldSystem.Location!.U32(0)}:{scriptManager.ScriptID}";
+                    traceFile = scriptManager.Contexts[0]?.ScriptFile ?? -1;
                     scriptStarts.TryGetValue(loggedScript, out int starts);
                     scriptStarts[loggedScript] = starts + 1;
                     if (starts + 1 > MaxSameScript)
@@ -369,9 +464,58 @@ public sealed class TestScript
         }
         if (loggedScript != -1)
         {
+            FinishTrace();
             loggedScript = -1;
             loggedText = "";
             Log("    script ended");
+        }
+    }
+
+    private void FinishTrace()
+    {
+        if (traceKey == null)
+        {
+            return;
+        }
+        ScriptTraceRecord? record = ScriptTrace.Take(traceFile);
+        if (record != null)
+        {
+            int added = memory.Observe(traceKey, traceFile, record, KeepRead);
+            Log($"    script {traceKey}: {record.Reads.Count} flag/var reads, {record.Offsets.Count} commands, {added} new; total coverage {memory.TotalCoverage()} commands in {memory.Coverage.Count} files");
+            memory.Save();
+        }
+        traceKey = null;
+        traceFile = -1;
+    }
+
+    private bool KeepRead(string key)
+    {
+        if (key[0] != 'v' || sApplication.CurrentManager?.Data is not FieldSystem field)
+        {
+            return true;
+        }
+        ushort varID = Convert.ToUInt16(key.Substring(1), 16);
+        VarsFlags varsFlags = VarsFlags.SaveData_GetVarsFlags(field.SaveData!);
+        int offset = VarsFlags.VarsFlags_GetVarOffset(varsFlags, varID);
+        return Array.IndexOf(StepCounterVarBytes, offset) < 0 && Array.IndexOf(StepCounterVarBytes, offset + 1) < 0 && !volatileBytes.Contains(offset) && !volatileBytes.Contains(offset + 1);
+    }
+
+    private int? CurrentRead(FieldSystem field, string key)
+    {
+        ushort id = Convert.ToUInt16(key.Substring(1), 16);
+        bool enabled = ScriptTrace.Enabled;
+        ScriptTrace.Enabled = false;
+        try
+        {
+            if (key[0] == 'v')
+            {
+                return KeepRead(key) ? FieldSystemVarsFlags.FieldSystem_TryGetVar(field, id) : null;
+            }
+            return FieldSystemVarsFlags.FieldSystem_CheckFlag(field, id) ? 1 : 0;
+        }
+        finally
+        {
+            ScriptTrace.Enabled = enabled;
         }
     }
 
@@ -381,15 +525,67 @@ public sealed class TestScript
         File.AppendAllText(ExploreLogPath, line + Environment.NewLine);
     }
 
-    private static int StateHash(FieldSystem field)
+    private int StateHash(FieldSystem field)
     {
         byte[] buffer = VarsFlags.SaveData_GetVarsFlags(field.SaveData!).Buffer;
         int hash = 17;
         for (int i = 0; i < VarsFlags.Size; i++)
         {
+            if (Array.IndexOf(StepCounterVarBytes, i) >= 0 || volatileBytes.Contains(i))
+            {
+                continue;
+            }
+            if (!byteHistory.TryGetValue(i, out List<byte>? history))
+            {
+                history = new List<byte> { buffer[i] };
+                byteHistory[i] = history;
+            }
+            else if (history[^1] != buffer[i])
+            {
+                if (history.Contains(buffer[i]))
+                {
+                    volatileBytes.Add(i);
+                    Log($"# ignoring state byte +{i:X3}: it changed back to an earlier value");
+                    continue;
+                }
+                history.Add(buffer[i]);
+            }
             hash = hash * 31 + buffer[i];
         }
         return hash;
+    }
+
+    private string StateKey(string target)
+    {
+        return target + "#" + exploreHash;
+    }
+
+    private static void UpdateKnownTriggers(FieldSystem field, int map, Func<int, bool> exhausted)
+    {
+        TestWorld.KnownTriggerTiles.Clear();
+        if (field.MapHeaderData is not MapHeaderData header || header.CoordEvents == null)
+        {
+            return;
+        }
+        foreach (CoordEvent coordEvent in header.CoordEvents)
+        {
+            if (FieldSystemVarsFlags.FieldSystem_TryGetVar(field, coordEvent.Var) != coordEvent.Value || !exhausted(coordEvent.Script))
+            {
+                continue;
+            }
+            for (int dz = 0; dz < Math.Max(1, (int)coordEvent.Length); dz++)
+            {
+                for (int dx = 0; dx < Math.Max(1, (int)coordEvent.Width); dx++)
+                {
+                    TestWorld.KnownTriggerTiles.Add((coordEvent.X + dx, coordEvent.Z + dz));
+                }
+            }
+        }
+    }
+
+    private bool GaveUpOn(string action, int map)
+    {
+        return memory.Fails.Contains(StateKey("fail:" + action + "@" + map));
     }
 
     private string? ChooseExploreAction(FieldSystem field, int map, int x, int z)
@@ -397,22 +593,57 @@ public sealed class TestScript
         int hash = StateHash(field);
         if (hash != exploreHash)
         {
-            if (exploreHash != 0)
+            byte[] vars = (byte[])VarsFlags.SaveData_GetVarsFlags(field.SaveData!).Buffer.Clone();
+            if (exploreHash != 0 && exploreVars != null)
             {
-                Log("# story state changed (flags or variables)");
+                List<string> changed = new();
+                for (int i = 0; i < VarsFlags.Size && changed.Count < 8; i++)
+                {
+                    if (vars[i] != exploreVars[i])
+                    {
+                        changed.Add($"+{i:X3}:{exploreVars[i]:X2}>{vars[i]:X2}");
+                    }
+                }
+                Log("# story state changed (flags or variables): " + string.Join(' ', changed));
             }
+            exploreVars = vars;
             exploreHash = hash;
-            talked.Clear();
-            triggered.Clear();
-            unreachable.Clear();
         }
         exploreMap = map;
+        if (memory.Maps.Add(map))
+        {
+            memory.Save();
+        }
+        RememberNurses(field, map);
+        string? heal = HealAction(field, map);
+        if (heal != null)
+        {
+            return heal;
+        }
+        bool Exhausted(int script) => memory.Exhausted($"{map}:{script}", key => CurrentRead(field, key));
+        UpdateKnownTriggers(field, map, Exhausted);
+        Dictionary<(int X, int Z), int> reach = TestWorld.Distances(field, x, z);
+        string? bestScript = null;
+        int bestScriptScore = int.MaxValue;
+        void Consider(string action, int script, int distance)
+        {
+            if (distance == int.MaxValue || GaveUpOn(action, map) || Exhausted(script))
+            {
+                return;
+            }
+            int score = (memory.Seen($"{map}:{script}") ? 100000 : 0) + distance;
+            if (score < bestScriptScore)
+            {
+                bestScriptScore = score;
+                bestScript = action;
+            }
+        }
         MapHeaderData? header = field.MapHeaderData as MapHeaderData;
         if (header != null && header.CoordEvents != null)
         {
             foreach (CoordEvent coordEvent in header.CoordEvents)
             {
-                if (FieldSystemVarsFlags.FieldSystem_TryGetVar(field, coordEvent.Var) != coordEvent.Value || triggered.Contains((map, coordEvent.Script)))
+                if (FieldSystemVarsFlags.FieldSystem_TryGetVar(field, coordEvent.Var) != coordEvent.Value)
                 {
                     continue;
                 }
@@ -420,67 +651,89 @@ public sealed class TestScript
                 {
                     for (int dx = 0; dx < Math.Max(1, (int)coordEvent.Width); dx++)
                     {
-                        string action = $"goto {coordEvent.X + dx} {coordEvent.Z + dz}";
-                        if (!unreachable.Contains(action + "@" + map) && !(coordEvent.X + dx == x && coordEvent.Z + dz == z))
+                        int tileX = coordEvent.X + dx;
+                        int tileZ = coordEvent.Z + dz;
+                        if ((tileX != x || tileZ != z) && reach.TryGetValue((tileX, tileZ), out int distance))
                         {
-                            triggered.Add((map, coordEvent.Script));
-                            return action;
+                            Consider($"goto {tileX} {tileZ}", coordEvent.Script, distance);
                         }
                     }
                 }
             }
         }
         MapObject? player = field.PlayerAvatar?.MapObject;
-        MapObject? nearest = null;
-        int nearestDistance = int.MaxValue;
         foreach (MapObject mapObject in TestWorld.Objects(field))
         {
-            int localID = MapObject.MapObject_GetLocalID(mapObject);
-            if (mapObject == player || MapObject.MapObject_GetScript(mapObject) == NoScript || talked.Contains((map, localID)) || unreachable.Contains($"talkto {localID}@{map}"))
+            int script = MapObject.MapObject_GetScript(mapObject);
+            if (mapObject == player || script == NoScript || script == 0)
             {
                 continue;
             }
-            int distance = Math.Abs(MapObject.MapObject_GetX(mapObject) - x) + Math.Abs(MapObject.MapObject_GetZ(mapObject) - z);
-            if (distance < nearestDistance)
-            {
-                nearestDistance = distance;
-                nearest = mapObject;
-            }
+            Consider($"talkto {MapObject.MapObject_GetLocalID(mapObject)}", script, TestWorld.NearestAdjacent(reach, MapObject.MapObject_GetX(mapObject), MapObject.MapObject_GetZ(mapObject)));
         }
-        if (nearest != null && nearestDistance <= ExploreObjectRange)
+        if (header != null && header.BgEvents != null)
         {
-            int localID = MapObject.MapObject_GetLocalID(nearest);
-            talked.Add((map, localID));
-            return $"talkto {localID}";
-        }
-        if (header != null && header.WarpEvents != null)
-        {
-            WarpEvent? best = null;
-            int bestVisits = int.MaxValue;
-            int bestDistance = int.MaxValue;
-            foreach (WarpEvent warp in header.WarpEvents)
+            foreach (BgEvent bgEvent in header.BgEvents)
             {
-                string action = $"warp {warp.DestHeaderID} {warp.X} {warp.Z}";
-                if (warp.DestHeaderID == map || unreachable.Contains(action + "@" + map))
+                if (bgEvent.Script == 0 || bgEvent.Script == NoScript)
                 {
                     continue;
                 }
-                warpVisits.TryGetValue((map, warp.X, warp.Z), out int visits);
-                int distance = Math.Abs(warp.X - x) + Math.Abs(warp.Z - z);
-                if (visits < bestVisits || (visits == bestVisits && distance < bestDistance))
-                {
-                    best = warp;
-                    bestVisits = visits;
-                    bestDistance = distance;
-                }
-            }
-            if (best != null)
-            {
-                warpVisits[(map, best.X, best.Z)] = bestVisits + 1;
-                return $"warp {best.DestHeaderID} {best.X} {best.Z}";
+                Consider($"check {bgEvent.X} {bgEvent.Z}", bgEvent.Script, TestWorld.NearestAdjacent(reach, bgEvent.X, bgEvent.Z));
             }
         }
-        return null;
+        if (bestScript != null)
+        {
+            return bestScript;
+        }
+        List<(string Action, int Dest, int Distance)> exits = new();
+        if (header != null && header.WarpEvents != null)
+        {
+            foreach (WarpEvent warp in header.WarpEvents)
+            {
+                string action = $"warp {warp.DestHeaderID} {warp.X} {warp.Z}";
+                int distance = Math.Min(reach.GetValueOrDefault((warp.X, warp.Z), int.MaxValue), TestWorld.NearestAdjacent(reach, warp.X, warp.Z));
+                if (warp.DestHeaderID != map && distance != int.MaxValue && !GaveUpOn(action, map))
+                {
+                    exits.Add((action, warp.DestHeaderID, distance));
+                }
+            }
+        }
+        Dictionary<int, int> edgeDistance = new();
+        foreach (var tile in reach)
+        {
+            int other = MapAt(field, tile.Key.X, tile.Key.Z);
+            if (other != map && other > 0 && (!edgeDistance.TryGetValue(other, out int known) || tile.Value < known))
+            {
+                edgeDistance[other] = tile.Value;
+            }
+        }
+        foreach (var edge in edgeDistance)
+        {
+            string action = $"edge {edge.Key}";
+            if (!GaveUpOn(action, map))
+            {
+                exits.Add((action, edge.Key, edge.Value));
+            }
+        }
+        string? best = null;
+        int bestScore = int.MaxValue;
+        foreach (var exit in exits)
+        {
+            int used = memory.Exits.GetValueOrDefault($"{map}:{exit.Action}");
+            int score = (memory.Maps.Contains(exit.Dest) ? 1000000 : 0) + used * 10000 + exit.Distance;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = exit.Action;
+            }
+        }
+        if (best != null)
+        {
+            memory.Exits[$"{map}:{best}"] = memory.Exits.GetValueOrDefault($"{map}:{best}") + 1;
+            memory.Save();
+        }
+        return best;
     }
 
     private void ResetStep()
@@ -493,6 +746,10 @@ public sealed class TestScript
         pushFrames = 0;
         navigateFrames = 0;
         scriptStarts.Clear();
+        if (loggedScript == -1)
+        {
+            ScriptTrace.Clear();
+        }
         busyStarts = 0;
         sawBusy = false;
         arrived = false;
@@ -508,7 +765,11 @@ public sealed class TestScript
     {
         if (generatedStep)
         {
-            Log(string.Join(' ', steps[index]));
+            Log(string.Join(' ', steps[index]) + "   -> " + currentPosition);
+            if (FieldState(out _, out int arrivedMap, out _, out _, out _))
+            {
+                RememberLink(exploreMap, string.Join(' ', steps[index]), arrivedMap);
+            }
             steps.RemoveAt(index);
             generatedStep = false;
             exploreActions++;
@@ -544,6 +805,10 @@ public sealed class TestScript
         int keys = 0;
         stepFrame++;
         bool inField = FieldState(out FieldSystem? field, out int map, out int x, out int z, out bool busy);
+        if (inField)
+        {
+            currentPosition = $"[map {map} at ({x},{z})]";
+        }
         if (index != loggedStep)
         {
             loggedStep = index;
@@ -561,6 +826,15 @@ public sealed class TestScript
         if (inField && busy && !previousBusy)
         {
             busyStarts++;
+        }
+        if (ActiveBattle() != null && !busyWasBattle)
+        {
+            busyWasBattle = true;
+            busyStarts--;
+        }
+        if (!(inField && busy))
+        {
+            busyWasBattle = false;
         }
         previousBusy = inField && busy;
         if (generatedStep && busyStarts > MaxInterruptions && inField && !busy)
@@ -824,6 +1098,59 @@ public sealed class TestScript
                 }
                 break;
             }
+            case "edge":
+            {
+                int destination = int.Parse(step[1]);
+                if (!inField || busy)
+                {
+                    keys = BusyKeys(label, x, z);
+                    break;
+                }
+                if (map == destination)
+                {
+                    Next();
+                    break;
+                }
+                FieldSystem edgeField = field!;
+                keys = Navigate(edgeField, label, map, x, z, (tileX, tileZ) => MapAt(edgeField, tileX, tileZ) == destination, $"map {destination}");
+                break;
+            }
+            case "grass":
+            {
+                int limit = step.Length > 1 ? int.Parse(step[1]) : 4000;
+                if (!inField)
+                {
+                    if (stepFrame > 1)
+                    {
+                        Status = $"{label}\n  left the field (encounter started)";
+                        Next();
+                    }
+                    break;
+                }
+                if (busy)
+                {
+                    keys = BusyKeys(label, x, z);
+                    break;
+                }
+                if (stepFrame > limit)
+                {
+                    Fail($"{label}\n  FAILED: no encounter after {limit} frames in tall grass on map {map}");
+                    break;
+                }
+                FieldSystem grassField = field!;
+                bool IsGrass(int tileX, int tileZ) => TileBehavior.TileBehavior_IsTallGrass(TestWorld.TileBehaviorAt(grassField, tileX, tileZ)) != 0;
+                int fromX = x;
+                int fromZ = z;
+                if (IsGrass(x, z))
+                {
+                    keys = Navigate(grassField, label, map, x, z, (tileX, tileZ) => Math.Abs(tileX - fromX) + Math.Abs(tileZ - fromZ) == 1 && IsGrass(tileX, tileZ), "neighbouring tall grass");
+                }
+                else
+                {
+                    keys = Navigate(grassField, label, map, x, z, IsGrass, "tall grass");
+                }
+                break;
+            }
             case "explore":
             {
                 int limit = step.Length > 1 ? int.Parse(step[1]) : DefaultExploreActions;
@@ -883,7 +1210,7 @@ public sealed class TestScript
                 }
                 int objectX = MapObject.MapObject_GetX(target);
                 int objectZ = MapObject.MapObject_GetZ(target);
-                if (Math.Abs(x - objectX) + Math.Abs(z - objectZ) == 1)
+                if (CanTalkFrom(field!, x, z, objectX, objectZ))
                 {
                     arrived = true;
                     int facing = TestWorld.KeyToward(x, z, objectX, objectZ);
@@ -900,7 +1227,140 @@ public sealed class TestScript
                     break;
                 }
                 arrived = false;
-                keys = Navigate(field!, label, map, x, z, (tx, tz) => Math.Abs(tx - objectX) + Math.Abs(tz - objectZ) == 1, $"object {localID} at ({objectX},{objectZ})");
+                FieldSystem talkField = field!;
+                keys = Navigate(talkField, label, map, x, z, (tx, tz) => CanTalkFrom(talkField, tx, tz, objectX, objectZ), $"object {localID} at ({objectX},{objectZ})");
+                break;
+            }
+            case "check":
+            {
+                int checkX = int.Parse(step[1]);
+                int checkZ = int.Parse(step[2]);
+                if (!inField)
+                {
+                    keys = BusyKeys(label, x, z);
+                    break;
+                }
+                if (busy)
+                {
+                    talkStarted |= arrived;
+                    keys = BusyKeys(label, x, z);
+                    idleFrames = 0;
+                    break;
+                }
+                if (talkStarted)
+                {
+                    idleFrames++;
+                    Status = $"{label}\n  finished checking ({checkX},{checkZ})";
+                    if (idleFrames >= IdleFramesToFinishTalk)
+                    {
+                        Next();
+                    }
+                    break;
+                }
+                if (Math.Abs(x - checkX) + Math.Abs(z - checkZ) == 1)
+                {
+                    arrived = true;
+                    int facing = TestWorld.KeyToward(x, z, checkX, checkZ);
+                    keys = stepFrame % PulsePeriod < PulseHold ? (pushFrames % 2 == 0 ? facing : KeyA) : 0;
+                    if (stepFrame % PulsePeriod == 0)
+                    {
+                        pushFrames++;
+                    }
+                    Status = $"{label}\n  next to ({checkX},{checkZ}), facing it and pressing A";
+                    if (pushFrames > 40)
+                    {
+                        Fail($"{label}\n  FAILED: nothing happened when checking ({checkX},{checkZ})");
+                    }
+                    break;
+                }
+                arrived = false;
+                keys = Navigate(field!, label, map, x, z, (tx, tz) => Math.Abs(tx - checkX) + Math.Abs(tz - checkZ) == 1, $"the spot ({checkX},{checkZ})");
+                break;
+            }
+            case "runscript":
+                if (!inField || (busy && !talkStarted))
+                {
+                    keys = BusyKeys(label, x, z);
+                    break;
+                }
+                if (!talkStarted)
+                {
+                    ScriptManager.ScriptManager_Set(field!, ushort.Parse(step[1]), null);
+                    talkStarted = true;
+                    break;
+                }
+                if (busy)
+                {
+                    keys = BusyKeys(label, x, z);
+                    idleFrames = 0;
+                    break;
+                }
+                idleFrames++;
+                Status = $"{label}\n  script {step[1]} finished";
+                if (idleFrames >= IdleFramesToFinishTalk)
+                {
+                    Next();
+                }
+                break;
+            case "tiles":
+            {
+                if (!inField || busy)
+                {
+                    keys = BusyKeys(label, x, z);
+                    break;
+                }
+                int tileX = int.Parse(step[1]);
+                List<string> tiles = new();
+                for (int tileZ = int.Parse(step[2]); tileZ <= int.Parse(step[3]); tileZ++)
+                {
+                    try
+                    {
+                        int behavior = TestWorld.TileBehaviorAt(field!, tileX, tileZ);
+                        tiles.Add($"{tileZ}:b{behavior:X2}{(TestWorld.TerrainBlocked(field!, tileX, tileZ) ? "C" : "")}{(TestWorld.Walkable(field!, tileX, tileZ) ? "" : "X")}");
+                    }
+                    catch (Exception)
+                    {
+                        tiles.Add($"{tileZ}:?");
+                    }
+                }
+                Log($"# tiles at x={tileX}: " + string.Join(' ', tiles));
+                Next();
+                break;
+            }
+            case "ledges":
+            {
+                if (!inField || busy)
+                {
+                    keys = BusyKeys(label, x, z);
+                    break;
+                }
+                List<string> found = new();
+                for (int dz = -40; dz <= 40; dz++)
+                {
+                    for (int dx = -40; dx <= 40; dx++)
+                    {
+                        int behavior;
+                        try
+                        {
+                            behavior = TestWorld.TileBehaviorAt(field!, x + dx, z + dz);
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+                        string dir = TileBehavior.TileBehavior_IsJumpSouth(behavior) != 0 ? "S" : TileBehavior.TileBehavior_IsJumpNorth(behavior) != 0 ? "N" : TileBehavior.TileBehavior_IsJumpWest(behavior) != 0 ? "W" : TileBehavior.TileBehavior_IsJumpEast(behavior) != 0 ? "E" : "";
+                        if (dir != "")
+                        {
+                            found.Add($"{x + dx},{z + dz}{dir}");
+                        }
+                    }
+                }
+                Log($"# ledges near ({x},{z}) on map {map}: " + string.Join(' ', found));
+                if (field!.MapHeaderData is MapHeaderData bgHeader && bgHeader.BgEvents != null)
+                {
+                    Log($"# bg events on map {map}: " + string.Join(' ', bgHeader.BgEvents.Select(bg => $"{bg.X},{bg.Z}:{bg.Script}")));
+                }
+                Next();
                 break;
             }
             default:

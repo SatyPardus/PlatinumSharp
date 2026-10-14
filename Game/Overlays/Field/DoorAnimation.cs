@@ -65,6 +65,18 @@ public static class DoorAnimations
     private const int FadeDuration = 6;
     private const int HeapIDFieldTask = 0xB;
     private const byte FadeTypeIn = 1;
+    private const int DirWest = 2;
+    private const int DirEast = 3;
+    private const uint EscalatorExitModelIDsAddress = 0x021F89D4;
+    private const uint EscalatorEnterModelIDsAddress = 0x021F89E4;
+    private const int EscalatorModelIDCount = 4;
+    private const uint EscalatorHitboxSizeX = 2;
+    private const int EscalatorTag = 2;
+    private const int SeqSeEscalator = 0x615;
+    private const int MovementActionWalkWest = 0xA;
+    private const int MovementActionWalkEast = 0xB;
+    private const int MovementActionEscalatorStart = 0x49;
+    private const int MovementActionEscalatorEnd = 0x4A;
 
     private static int[] ModelIDs(uint address)
     {
@@ -324,6 +336,185 @@ public static class DoorAnimations
             DoorAnimation_ZoomOut(fieldSystem.Camera!, ref door.FovStep);
         }
         return false;
+    }
+
+    private static bool LoadEscalatorAnimation(FieldSystem fieldSystem, DoorAnimation door, uint modelIDsAddress, byte direction, bool loop)
+    {
+        uint[] words = RomData.OverlayU32(OverlayID, modelIDsAddress, EscalatorModelIDCount);
+        int[] modelIDs = new int[EscalatorModelIDCount];
+        for (int i = 0; i < EscalatorModelIDCount; i++)
+        {
+            modelIDs[i] = (int)words[i];
+        }
+        TerrainCollisionHitbox hitbox;
+        if (direction == DirWest)
+        {
+            TerrainCollisionManager.TerrainCollisionHitbox_Init(door.TileX, door.TileZ, -1, 0, EscalatorHitboxSizeX, HitboxSizeZ, out hitbox);
+        }
+        else
+        {
+            TerrainCollisionManager.TerrainCollisionHitbox_Init(door.TileX, door.TileZ, 0, 0, EscalatorHitboxSizeX, HitboxSizeZ, out hitbox);
+        }
+        door.HitboxInitialized = 2;
+        object? mapProp = null;
+        int modelID = 0;
+        if (!TerrainCollisionManager.FieldSystem_FindCollidingLoadedMapPropByModelIDs(fieldSystem, modelIDs, EscalatorModelIDCount, ref hitbox, ref mapProp, ref modelID))
+        {
+            return false;
+        }
+        G3dTexture? texture = AreaData.AreaDataManager_GetMapPropTexture(fieldSystem.AreaDataManager);
+        G3dRenderObj renderObj = MapProps.MapProp_GetRenderObj((MapProp)mapProp!);
+        G3dModel? model = MapProps.MapProp_GetModel((MapProp)mapProp!);
+        MapPropAnimations.MapPropOneShotAnimationManager_LoadPropAnimations(fieldSystem.MapPropAnimationManager!, fieldSystem.MapPropOneShotAnimationManager!, EscalatorTag, modelID, renderObj, model, texture, 1, 1, loop);
+        MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+        if (MovementActions.LocalMapObj_IsAnimationSet(playerObject) == 1)
+        {
+            MovementActions.LocalMapObj_SetAnimationCode(playerObject, MovementActionEscalatorStart);
+        }
+        else
+        {
+            ErrorHandling.GF_AssertFail();
+        }
+        return true;
+    }
+
+    private static bool FinishEscalatorAnimation(FieldSystem fieldSystem)
+    {
+        if (MapPropAnimations.MapPropOneShotAnimationManager_IsAnimationLoopFinished(fieldSystem.MapPropOneShotAnimationManager!, EscalatorTag) && ScreenFadeControl.IsScreenFadeDone())
+        {
+            MapPropAnimations.MapPropOneShotAnimationManager_UnloadAnimation(fieldSystem.MapPropAnimationManager, fieldSystem.MapPropOneShotAnimationManager!, EscalatorTag);
+            SoundPlayback.Sound_StopEffect(SeqSeEscalator, 0);
+            return true;
+        }
+        return false;
+    }
+
+    // OFFSET 0x021D4858
+    public static int FieldSystem_RunEscalatorEnterAnimation(FieldSystem fieldSystem, DoorAnimation door, byte direction)
+    {
+        switch (door.State)
+        {
+            case 0:
+                if (!LoadEscalatorAnimation(fieldSystem, door, EscalatorEnterModelIDsAddress, direction, true))
+                {
+                    ErrorHandling.GF_AssertFail();
+                    return 1;
+                }
+                door.State++;
+                break;
+            case 1:
+            {
+                FieldMap.FieldMap_FadeScreen(1);
+                MapPropAnimations.MapPropOneShotAnimationManager_PlayAnimationWithSoundEffect(fieldSystem.MapPropOneShotAnimationManager!, EscalatorTag, 0, SeqSeEscalator);
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_IsAnimationSet(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_SetAnimationCode(playerObject, direction == DirEast ? MovementActionWalkEast : MovementActionWalkWest);
+                }
+                else
+                {
+                    ErrorHandling.GF_AssertFail();
+                }
+                door.State++;
+                break;
+            }
+            case 2:
+            {
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_IsAnimationSet(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_SetAnimationCode(playerObject, MovementActionEscalatorEnd);
+                    door.State++;
+                }
+                break;
+            }
+            case 3:
+            {
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_IsAnimationSet(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_SetAnimationCode(playerObject, direction == DirEast ? MovementActionWalkEast : MovementActionWalkWest);
+                    door.State++;
+                }
+                break;
+            }
+            case 4:
+            {
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_CheckAnimationFinished(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_ClearFinishedAnimation(playerObject);
+                    door.State++;
+                }
+                break;
+            }
+            case 5:
+                if (FinishEscalatorAnimation(fieldSystem))
+                {
+                    return 1;
+                }
+                break;
+        }
+        return 0;
+    }
+
+    // OFFSET 0x021D4A24
+    public static int FieldSystem_RunEscalatorExitAnimation(FieldSystem fieldSystem, DoorAnimation door, byte direction)
+    {
+        switch (door.State)
+        {
+            case 0:
+                if (!LoadEscalatorAnimation(fieldSystem, door, EscalatorExitModelIDsAddress, direction, false))
+                {
+                    ErrorHandling.GF_AssertFail();
+                    return 1;
+                }
+                door.State++;
+                break;
+            case 1:
+            {
+                MapPropAnimations.MapPropOneShotAnimationManager_PlayAnimationWithSoundEffect(fieldSystem.MapPropOneShotAnimationManager!, EscalatorTag, 0, SeqSeEscalator);
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_IsAnimationSet(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_SetAnimationCode(playerObject, direction == DirWest ? MovementActionWalkWest : MovementActionWalkEast);
+                }
+                else
+                {
+                    ErrorHandling.GF_AssertFail();
+                }
+                door.State++;
+                break;
+            }
+            case 2:
+            {
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_IsAnimationSet(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_SetAnimationCode(playerObject, MovementActionEscalatorEnd);
+                    FieldMap.FieldMap_FadeScreen(0);
+                    door.State++;
+                }
+                break;
+            }
+            case 3:
+            {
+                MapObject playerObject = PlayerAvatar.PlayerAvatar_GetMapObject(fieldSystem.PlayerAvatar!);
+                if (MovementActions.LocalMapObj_CheckAnimationFinished(playerObject) == 1)
+                {
+                    MovementActions.LocalMapObj_ClearFinishedAnimation(playerObject);
+                    door.State++;
+                }
+                break;
+            }
+            case 4:
+                if (FinishEscalatorAnimation(fieldSystem))
+                {
+                    return 1;
+                }
+                break;
+        }
+        return 0;
     }
 
     // OFFSET 0x021D4BC8

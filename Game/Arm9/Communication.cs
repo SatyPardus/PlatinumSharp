@@ -169,6 +169,16 @@ public static class CommManager
         return CommTypeNone;
     }
 
+    // OFFSET 0x02038EB4
+    public static int CommMan_IsInitializedNotPoketch()
+    {
+        if (sCommMan != null)
+        {
+            throw Unported.Partial(0x02038EB4);
+        }
+        return CommSystem.CommSys_IsInitialized();
+    }
+
     // OFFSET 0x020389B8
     public static int CommMan_IsWiFi()
     {

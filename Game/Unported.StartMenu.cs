@@ -2,35 +2,16 @@ namespace PlatinumSharp.Game;
 
 public static partial class Unported
 {
-    public static void sub_0203D1E4(FieldSystem fieldSystem, object? bagContext) => throw Missing(0x0203D1E4);
-    public static object? sub_0203D20C(FieldSystem fieldSystem, ItemUseContext itemUseContext) => throw Missing(0x0203D20C);
     public static void sub_0203D2E4(FieldSystem fieldSystem, object? berryTagContainer) => throw Missing(0x0203D2E4);
-    public static void sub_0203D334(FieldSystem fieldSystem, PokemonSummary summary) => throw Missing(0x0203D334);
-    public static PartyMenu sub_0203D390(FieldSystem fieldSystem, FieldMoveContext fieldMoveContext, byte partySlot) => throw Missing(0x0203D390);
     public static void sub_0203D874(FieldSystem fieldSystem, object? easyChatArgs) => throw Missing(0x0203D874);
-    public static object? sub_0203D8EC(FieldSystem fieldSystem) => throw Missing(0x0203D8EC);
     public static object? sub_0203D920(FieldSystem fieldSystem, int mode, byte partySlot, byte mailType, int heapID) => throw Missing(0x0203D920);
     public static object? sub_0203D984(FieldSystem fieldSystem, Pokemon mon, int heapID) => throw Missing(0x0203D984);
-    public static void sub_0203E09C(FieldSystem fieldSystem, object? trainerCard) => throw Missing(0x0203E09C);
     public static void sub_0203E0AC(FieldSystem fieldSystem, PokedexOverlayArgs args) => throw Missing(0x0203E0AC);
-    public static ItemMenuUseFunc sub_020683F4(int type, ushort functionIndex) => throw Missing(0x020683F4);
     public static object? sub_0207064C(int heapID, FieldSystem fieldSystem, Pokemon mon, ushort mapHeaderID, short x, short z) => throw Missing(0x0207064C);
     public static bool sub_02070680(FieldTask task) => throw Missing(0x02070680);
-    public static FieldMoveTaskFunc sub_0207070C(int type, ushort fieldMove) => throw Missing(0x0207070C);
-    public static void sub_02071D40(byte a, byte b, byte c, byte d, FieldSystem fieldSystem, object? trainerCard) => throw Missing(0x02071D40);
-    public static object? sub_02071F04(int heapID) => throw Missing(0x02071F04);
-    public static void sub_02071F20(object? trainerCard) => throw Missing(0x02071F20);
-    public static void sub_020721D4(FieldSystem fieldSystem, object? trainerCard) => throw Missing(0x020721D4);
     public static object? sub_0207AE68(Party party, Pokemon mon, int targetSpecies, Options options, int showContest, Pokedex pokedex, Bag bag, GameRecords records, object poketch, int evoType, int flags, int heapID) => throw Missing(0x0207AE68);
     public static int sub_0207B0D0(object? evolution) => throw Missing(0x0207B0D0);
     public static void sub_0207B0E0(object? evolution) => throw Missing(0x0207B0E0);
-    public static void sub_0207CB2C(object? bagContext, SaveData saveData, byte mode, BagCursor? cursor) => throw Missing(0x0207CB2C);
-    public static void sub_0207CB70(object? bagContext, byte partySlot) => throw Missing(0x0207CB70);
-    public static ushort sub_0207CB94(object? bagContext) => throw Missing(0x0207CB94);
-    public static ushort sub_0207CB9C(object? bagContext) => throw Missing(0x0207CB9C);
-    public static byte sub_0207CBA4(object? bagContext) => throw Missing(0x0207CBA4);
-    public static void sub_0208D720(PokemonSummary summary, byte[] pages) => throw Missing(0x0208D720);
-    public static void sub_0208E9C0(PokemonSummary summary, TrainerInfo trainerInfo) => throw Missing(0x0208E9C0);
     public static object? sub_020972FC(int heapID) => throw Missing(0x020972FC);
     public static void sub_02097320(object? berryTagContainer, byte item, int selected) => throw Missing(0x02097320);
     public static void sub_0209733C(object? berryTagContainer, byte scroll, byte index, byte count) => throw Missing(0x0209733C);
@@ -44,17 +25,14 @@ public static partial class Unported
     public static void sub_02097750(object? mailData, Pokemon mon) => throw Missing(0x02097750);
     public static void sub_02097770(object? mailData) => throw Missing(0x02097770);
     public static void sub_02098AF0(object? poffinCase) => throw Missing(0x02098AF0);
-    public static void ov5_021E2064(FieldSystem fieldSystem) => throw Missing(0x021E2064);
     public static int sub_020563BC(FieldSystem fieldSystem) => throw Missing(0x020563BC);
     public static void sub_02036AC4() => throw Missing(0x02036AC4);
     public static void sub_0205C010(object? commUnionRoom, EasyChatSentence sentence) => throw Missing(0x0205C010);
     public static void sub_0205C12C(EasyChatSentence sentence) => throw Missing(0x0205C12C);
     public static void sub_0205C2B0(object? unionRoomState) => throw Missing(0x0205C2B0);
-    public static void sub_02050E78(FieldSystem fieldSystem, FieldTask task, object? battleParams) => throw Missing(0x02050E78);
     public static object? ov6_02243F88(FieldSystem fieldSystem, int fromMenu, Pokemon mon, int gender) => throw Missing(0x02243F88);
     public static int ov6_02243FBC(object? cutInTask) => throw Missing(0x02243FBC);
     public static void ov6_02243FC8(object? cutInTask) => throw Missing(0x02243FC8);
-    public static int ov6_022413E4(FieldSystem fieldSystem, out object? battleParams) => throw Missing(0x022413E4);
     public static object? ov6_022485F4(FieldSystem fieldSystem) => throw Missing(0x022485F4);
     public static void ov6_02248608(object? waterfallEffect) => throw Missing(0x02248608);
     public static object? ov6_0224892C(FieldSystem fieldSystem) => throw Missing(0x0224892C);
@@ -66,4 +44,11 @@ public static partial class Unported
     public static int ov9_0224F6EC(object? boulderTask) => throw Missing(0x0224F6EC);
     public static void ov5_021F88CC(OverworldAnimManager? animManager, int syncPosition) => throw Missing(0x021F88CC);
     public static void ov5_021F88DC(OverworldAnimManager? animManager, int syncPosition) => throw Missing(0x021F88DC);
+    public static void sub_0206B70C(FieldSystem fieldSystem, object? townMapContext, int mode) => throw Missing(0x0206B70C);
+    public static void sub_0203D884(FieldSystem fieldSystem, object? townMapContext) => throw Missing(0x0203D884);
+    public static object? ov6_02247530(FieldSystem fieldSystem, Pokemon mon, int heapID) => throw Missing(0x02247530);
+    public static bool ov6_02247554(FieldTask task) => throw Missing(0x02247554);
+    public static object? ov6_02247488(FieldSystem fieldSystem, Pokemon mon, int heapID) => throw Missing(0x02247488);
+    public static bool ov6_022474AC(FieldTask task) => throw Missing(0x022474AC);
+    public static bool ov5_021F101C(FieldTask task) => throw Missing(0x021F101C);
 }

@@ -26,6 +26,12 @@ public static class Encounters
     private const int MapHeaderDistortionWorldTurnback = 0xFB;
     private const int RecordWildBattles = 7;
     private const int RecordTrainerBattles = 8;
+    private const uint BattleTypeTrainerDoubleSingleTrainer = 3;
+    private const uint BattleTypeTrainerDouble = 0x13;
+    private const uint BattleTypeTagDouble = 0x4B;
+    private const int MapHeaderDistortionWorldFirst = 0x23D;
+    private const int MapHeaderDistortionWorldLast = 0x247;
+    private const uint BattleStatusDistortion = 0x80;
     private const int ScoreWildDefeated = 8;
     private const int ScoreCaughtInDex = 9;
     private const int ScoreCaughtNotInDex = 0xA;
@@ -38,6 +44,8 @@ public static class Encounters
     private const int TerrainCave = 5;
     private const int TerrainWater = 7;
     private const uint BattleTypeNonTrainerSpecial = 0x720;
+    private const int BattleResultWin = 1;
+    private const int BattleResultCaught = 4;
 
     private static ushort[]? effectTable;
 
@@ -108,7 +116,7 @@ public static class Encounters
                 Encounter_UpdateFieldSystem(dto, fieldSystem);
                 if (dto.BattleType == FieldBattleDTO.BattleTypeWild || dto.BattleType == FieldBattleDTO.BattleTypeRoamer || dto.BattleType == BattleTypeLegendaryWild)
                 {
-                    sub_0206D1B8(fieldSystem, dto.CaptureAttempt, dto.ResultMask);
+                    FieldTimeEvents.FieldSystem_SaveTVSegment_CatchThatPokemonShow(fieldSystem, dto.CaptureAttempt, dto.ResultMask);
                 }
                 if (Encounter_StoreResultAndCheckWon(encounter) == 0)
                 {
@@ -138,6 +146,139 @@ public static class Encounters
         return false;
     }
 
+    // OFFSET 0x02050DD4
+    private static Encounter NewWildEncounter(FieldBattleDTO dto, int effectID, int battleBGM, Action<int>? setResult)
+    {
+        Encounter encounter = new();
+        encounter.SetResult = setResult;
+        setResult?.Invoke(0);
+        encounter.EncounterEffectID = effectID;
+        encounter.BattleBGM = battleBGM;
+        encounter.DTO = dto;
+        encounter.State = 0;
+        return encounter;
+    }
+
+    // OFFSET 0x02050DFC
+    private static void FreeWildEncounter(Encounter encounter)
+    {
+        FieldBattleDTO.FieldBattleDTO_Free(encounter.DTO);
+    }
+
+    // OFFSET 0x02050E10
+    public static void Encounter_NewVsWild(FieldSystem fieldSystem, FieldBattleDTO dto)
+    {
+        if (SystemFlags.SystemFlag_CheckSafariGameActive(VarsFlags.SaveData_GetVarsFlags(fieldSystem.SaveData!)))
+        {
+            Encounter safari = Encounter_New(dto, EncounterEffect_GetEffectID(dto), EncounterEffect_GetBattleBGM(dto), null);
+            FieldTask.FieldSystem_CreateTask(fieldSystem, FieldTask_SafariEncounter, safari);
+            return;
+        }
+        Encounter encounter = NewWildEncounter(dto, EncounterEffect_GetEffectID(dto), EncounterEffect_GetBattleBGM(dto), null);
+        FieldTask.FieldSystem_CreateTask(fieldSystem, FieldTask_WildEncounter, encounter);
+    }
+
+    // OFFSET 0x02050E78
+    public static void Encounter_StartVsWild(FieldSystem fieldSystem, FieldTask task, FieldBattleDTO dto)
+    {
+        if (SystemFlags.SystemFlag_CheckSafariGameActive(VarsFlags.SaveData_GetVarsFlags(fieldSystem.SaveData!)))
+        {
+            Encounter safari = Encounter_New(dto, EncounterEffect_GetEffectID(dto), EncounterEffect_GetBattleBGM(dto), null);
+            FieldTask.FieldTask_InitJump(task, FieldTask_SafariEncounter, safari);
+            return;
+        }
+        Encounter encounter = NewWildEncounter(dto, EncounterEffect_GetEffectID(dto), EncounterEffect_GetBattleBGM(dto), null);
+        FieldTask.FieldTask_InitJump(task, FieldTask_WildEncounter, encounter);
+    }
+
+    // OFFSET 0x02050EE0
+    private static bool FieldTask_WildEncounter(FieldTask task)
+    {
+        FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
+        Encounter encounter = (Encounter)FieldTask.FieldTask_GetEnv(task)!;
+        switch (encounter.State)
+        {
+            case 0:
+                MapObjectManager.MapObjectMan_PauseAllMovement(fieldSystem.MapObjectManager!);
+                GameRecords.GameRecords_IncrementRecordValue(GameRecords.SaveData_GetGameRecords(fieldSystem.SaveData!), RecordWildBattles);
+                FieldTransition.FieldTransition_StartEncounterEffect(task, encounter.EncounterEffectID, encounter.BattleBGM);
+                encounter.State++;
+                break;
+            case 1:
+                FieldTransition.FieldTransition_FinishMap(task);
+                encounter.State++;
+                break;
+            case 2:
+                FieldTask_StartBattle(task, encounter.DTO);
+                encounter.State++;
+                break;
+            case 3:
+            {
+                FieldBattleDTO dto = encounter.DTO;
+                Encounter_UpdateFieldSystem(dto, fieldSystem);
+                FieldTimeEvents.FieldSystem_SaveTVSegment_CatchThatPokemonShow(fieldSystem, dto.CaptureAttempt, dto.ResultMask);
+                if (FieldBattleResult.CheckPlayerWonBattle(dto.ResultMask) == 0)
+                {
+                    FreeWildEncounter(encounter);
+                    RadarChain.RadarChain_Clear(fieldSystem.RadarChain!);
+                    FieldTask.FieldTask_InitJump(task, BlackOut.FieldTask_BlackOut, null);
+                    return false;
+                }
+                if (SystemFlags.SystemFlag_CheckHasPartner(VarsFlags.SaveData_GetVarsFlags(fieldSystem.SaveData!)))
+                {
+                    PartyHeal.Party_HealAllMembers(Party.SaveData_GetParty(fieldSystem.SaveData!));
+                }
+                FieldSystem_UpdateBattleScores(fieldSystem, dto);
+                FieldSystem_UpdateBattleJournal(fieldSystem, dto);
+                if (RadarChain.RadarChain_GetActive(fieldSystem.RadarChain!) != 0)
+                {
+                    if (RadarChain.RadarChain_GetPatchEntered(fieldSystem.RadarChain!) != 0)
+                    {
+                        if (dto.ResultMask != BattleResultWin && dto.ResultMask != BattleResultCaught)
+                        {
+                            RadarChain.RadarChain_Clear(fieldSystem.RadarChain!);
+                        }
+                    }
+                    else
+                    {
+                        RadarChain.RadarChain_Clear(fieldSystem.RadarChain!);
+                    }
+                }
+                FieldTransition.FieldTransition_StartMap(task);
+                encounter.State++;
+                break;
+            }
+            case 4:
+                RoamerAfterBattle.RoamerAfterBattle_UpdateRoamers(fieldSystem, encounter.DTO);
+                FieldTransition.FieldTransition_FadeIn(task);
+                encounter.State++;
+                break;
+            case 5:
+                if (RadarChain.RadarChain_GetActive(fieldSystem.RadarChain!) != 0)
+                {
+                    RadarChain.PokeRadar_SetupGrassPatches(fieldSystem, encounter.DTO.ResultMask, fieldSystem.RadarChain!);
+                    RadarChain.PokeRadar_CreateShakingPatches(fieldSystem, fieldSystem.RadarChain!);
+                }
+                encounter.State++;
+                break;
+            case 6:
+                if (RadarChain.PokeRadar_FinishPatchShakes(fieldSystem.RadarChain!))
+                {
+                    MapObjectManager.MapObjectMan_UnpauseAllMovement(fieldSystem.MapObjectManager!);
+                    FreeWildEncounter(encounter);
+                    return true;
+                }
+                break;
+        }
+        return false;
+    }
+
+    // OFFSET 0x02051074
+    private static bool FieldTask_SafariEncounter(FieldTask task)
+    {
+        throw Unported.Partial(0x02051074);
+    }
+
     // OFFSET 0x02050C4C
     private static void Encounter_Start(FieldTask task, FieldBattleDTO dto, int effectID, int battleBGM, Action<int>? setResult)
     {
@@ -158,6 +299,89 @@ public static class Encounters
         TrainerData.Trainer_Encounter(dto, fieldSystem.SaveData!, heapID);
         GameRecords.GameRecords_IncrementRecordValue(GameRecords.SaveData_GetGameRecords(fieldSystem.SaveData!), RecordTrainerBattles);
         Encounter_Start(task, dto, EncounterEffect_GetEffectID(dto), EncounterEffect_GetBattleBGM(dto), setResult);
+    }
+
+    // OFFSET 0x020514E8
+    private static bool FieldTask_CatchingTutorialEncounter(FieldTask task)
+    {
+        Encounter encounter = (Encounter)FieldTask.FieldTask_GetEnv(task)!;
+        FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
+        ref int state = ref FieldTask.FieldTask_GetState(task);
+        switch (state)
+        {
+            case 0:
+                MapObjectManager.MapObjectMan_PauseAllMovement(fieldSystem.MapObjectManager!);
+                FieldTransition.FieldTransition_StartEncounterEffect(task, encounter.EncounterEffectID, encounter.BattleBGM);
+                state++;
+                break;
+            case 1:
+                FieldTransition.FieldTransition_FinishMap(task);
+                state++;
+                break;
+            case 2:
+                FieldTask_StartBattle(task, encounter.DTO);
+                state++;
+                break;
+            case 3:
+                state++;
+                break;
+            case 4:
+                FieldTransition.FieldTransition_StartMap(task);
+                state++;
+                break;
+            case 5:
+                MapObjectManager.MapObjectMan_UnpauseAllMovement(fieldSystem.MapObjectManager!);
+                FieldTransition.FieldTransition_FadeIn(task);
+                state++;
+                break;
+            case 6:
+                Encounter_Free(encounter);
+                return true;
+        }
+        return false;
+    }
+
+    // OFFSET 0x02051590
+    public static void Encounter_StartCatchingTutorial(FieldTask task)
+    {
+        FieldBattleDTO dto = FieldBattleDTO.FieldBattleDTO_NewCatchingTutorial(HeapIDFieldTask, FieldTask.FieldTask_GetFieldSystem(task));
+        int effectID = EncounterEffect_GetEffectID(dto);
+        Encounter encounter = Encounter_New(dto, effectID, EncounterEffect_GetBattleBGM(dto), null);
+        FieldTask.FieldTask_InitCall(task, FieldTask_CatchingTutorialEncounter, encounter);
+    }
+
+    // OFFSET 0x020515CC
+    public static void Encounter_NewVsTrainer(FieldTask task, int enemyTrainer1, int enemyTrainer2, int partnerTrainer, int heapID, Action<int>? setResult)
+    {
+        FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
+        uint battleType;
+        if (enemyTrainer2 != 0 && enemyTrainer1 != enemyTrainer2)
+        {
+            battleType = partnerTrainer == 0 ? BattleTypeTrainerDouble : BattleTypeTagDouble;
+        }
+        else if (enemyTrainer1 == enemyTrainer2)
+        {
+            battleType = BattleTypeTrainerDoubleSingleTrainer;
+        }
+        else
+        {
+            battleType = FieldBattleDTO.BattleTypeTrainer;
+        }
+        RadarChain.RadarChain_Clear(fieldSystem.RadarChain!);
+        FieldBattleDTO dto = FieldBattleDTO.FieldBattleDTO_New(HeapIDFieldTask, battleType);
+        FieldBattleDTO.FieldBattleDTO_Init(dto, fieldSystem);
+        int mapHeaderID = (int)fieldSystem.Location!.U32(0);
+        if (mapHeaderID >= MapHeaderDistortionWorldFirst && mapHeaderID <= MapHeaderDistortionWorldLast)
+        {
+            dto.BattleStatusMask |= BattleStatusDistortion;
+        }
+        dto.TrainerIDs[FieldBattleDTO.BattlerEnemy1] = enemyTrainer1;
+        dto.TrainerIDs[FieldBattleDTO.BattlerEnemy2] = enemyTrainer2;
+        dto.TrainerIDs[FieldBattleDTO.BattlerPartner] = partnerTrainer;
+        TrainerData.Trainer_Encounter(dto, fieldSystem.SaveData!, heapID);
+        GameRecords.GameRecords_IncrementRecordValue(GameRecords.SaveData_GetGameRecords(fieldSystem.SaveData!), RecordTrainerBattles);
+        int effectID = EncounterEffect_GetEffectID(dto);
+        Encounter_Start(task, dto, effectID, EncounterEffect_GetBattleBGM(dto), setResult);
     }
 
     // OFFSET 0x020518B0

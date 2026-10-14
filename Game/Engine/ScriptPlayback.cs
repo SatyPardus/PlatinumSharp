@@ -42,6 +42,7 @@ public static class ScriptPlayback
 
     public static bool Hold(ScriptContext ctx)
     {
+        ScriptTrace.OnCommand(ctx);
         if (!Enabled || ctx.Scripts == null || ctx.ScriptPtr < 0 || ctx.ScriptPtr + 1 >= ctx.Scripts.Length)
         {
             return false;

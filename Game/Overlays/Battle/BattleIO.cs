@@ -13,6 +13,8 @@ public static partial class BattleIO
     public const int CommandPokemonSendOut = 3;
     public const int PokemonSendOutSize = 0x74;
     public const int CommandDeleteTrainerSprite = 7;
+    private const int CommandReturnToBall = 6;
+    private const uint VolatileTransformedBit = 0x200000;
     public const int CommandTrainerEncounter = 8;
     public const int CommandThrowTrainerBall = 9;
     public const int CommandSlideTrainerOut = 0xA;
@@ -215,6 +217,28 @@ public static partial class BattleIO
         BattleSystems.BattleSystem_SetParticipant(battleSys, battler, slot);
         BattleIO_WriteMonMoves(battleSys, battler, message, 0x18);
         BattleIO_Send(battleSys, RecipientBattler, battler, message, PokemonSendOutSize);
+    }
+
+    // OFFSET 0x02265050
+    public static void BattleIO_ReturnToBall(BattleSystem battleSys, int battler, int ball)
+    {
+        byte face = (byte)((Battlers.Battler_GetType(battleSys.Battlers[battler]!) & 1) != 0 ? 2 : 0);
+        BattleMon mon = battleSys.BattleCtx!.BattleMons[battler];
+        int form = mon.FormNum & 0x1F;
+        byte[] message = new byte[4];
+        W8(message, 0, CommandReturnToBall);
+        int yOffset;
+        if ((mon.StatusVolatile & VolatileTransformedBit) != 0)
+        {
+            yOffset = PokemonSpriteMetadata.Pokemon_LoadSpriteYOffset(mon.Species, (byte)mon.MoveEffectsData.TransformedGender, face, (byte)form, mon.MoveEffectsData.TransformedPID);
+        }
+        else
+        {
+            yOffset = PokemonSpriteMetadata.Pokemon_LoadSpriteYOffset(mon.Species, (byte)(mon.Gender & 0xF), face, (byte)form, mon.Personality);
+        }
+        W8(message, 1, yOffset);
+        W16(message, 2, ball);
+        BattleIO_Send(battleSys, RecipientBattler, battler, message, 4);
     }
 
     // OFFSET 0x02265108

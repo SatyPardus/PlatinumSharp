@@ -110,6 +110,23 @@ public sealed class OamManager
         return true;
     }
 
+    public int RemainingCapacity => buffer.Length - used;
+
+    public int RemainingAffineCapacity => affineBuffer.Length - affineUsed;
+
+    public bool EntryMany(OamAttributes[] oams, int count)
+    {
+        if (count > RemainingCapacity)
+        {
+            return false;
+        }
+        for (int i = 0; i < count; i++)
+        {
+            buffer[used++] = oams[i];
+        }
+        return true;
+    }
+
     public bool Entry(OamAttributes oam, ushort affineIndex)
     {
         if (used >= buffer.Length)

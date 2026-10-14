@@ -16,6 +16,11 @@ public static class OverlaySystem
 
     private static readonly HashSet<int> loaded = new();
     private static readonly Dictionary<int, Action> initializers = new();
+
+    static OverlaySystem()
+    {
+        OverlayInitializers.Register();
+    }
     private static byte[]? table;
     private static uint defaultDma;
 

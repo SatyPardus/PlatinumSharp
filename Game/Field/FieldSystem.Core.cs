@@ -63,6 +63,7 @@ public sealed partial class FieldSystem
     public PlayerAvatar? PlayerAvatar;
     public int RunningFieldMap;
     public int MapLoadType;
+    public ushort WildEncounterSteps;
     public RadarChain? RadarChain;
     public BagCursor? BagCursor;
     public PokedexMemory? PokedexMemory;

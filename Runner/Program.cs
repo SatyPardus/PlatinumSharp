@@ -141,11 +141,11 @@ internal sealed class GameForm : Form
     private const int FrameMicroseconds = 16715;
     private const ushort PowerMainOnTop = 0x8000;
     private const int ScriptedHoldFrames = 4;
-    private const string DumpRoot = @"E:\Poketest\dumps";
+    private static readonly string DumpRoot = PlatinumSharp.Game.ProjectPaths.Dumps;
     private const int KeyLayoutTop = 46;
     private const int KeyLayoutHeight = 184;
     private const int NoRebind = -1;
-    private const string ShotDirectory = @"E:\Poketest\tools\tests\shots";
+    private static readonly string ShotDirectory = PlatinumSharp.Game.ProjectPaths.Shots;
 
     private static readonly string[] buttonNames = { "L", "R", "Up", "Left", "Right", "Down", "X", "Y", "A", "B", "Select", "Start" };
     private static readonly int[] buttonMasks = { Input.KeyL, Input.KeyR, Input.KeyUp, Input.KeyLeft, Input.KeyRight, Input.KeyDown, Input.KeyX, Input.KeyY, Input.KeyA, Input.KeyB, Input.KeySelect, Input.KeyStart };

@@ -587,11 +587,11 @@ public static partial class PlayerFieldMoves
             if (TileBehavior.TileBehavior_IsDeepMudWithGrass((byte)MapObject.MapObject_GetCurrTileBehavior(mapObject)) == 1)
             {
                 FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
-                if (ov6_022413E4(fieldSystem, out object? battleParams) == 1)
+                if (WildEncounters.WildEncounters_TryMudEncounter(fieldSystem, out FieldBattleDTO? battleParams) == 1)
                 {
                     PlayerAvatar.PlayerAvatar_SetEscapedFromDeepMud(env.PlayerAvatar, 1);
                     MonRideTaskEnv_Free(env);
-                    sub_02050E78(fieldSystem, task, battleParams);
+                    Encounters.Encounter_StartVsWild(fieldSystem, task, battleParams!);
                     return false;
                 }
             }

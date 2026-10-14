@@ -222,4 +222,19 @@ public static class FieldParty
         }
         return false;
     }
+
+    // OFFSET 0x0205E1B4
+    public static ushort SaveData_GetFirstNonEggInParty(SaveData saveData)
+    {
+        ushort count = (ushort)Party.Party_GetCurrentCount(Party.SaveData_GetParty(saveData));
+        for (ushort slot = 0; slot < count; slot++)
+        {
+            Pokemon mon = Party.Party_GetPokemonBySlotIndex(Party.SaveData_GetParty(saveData), slot);
+            if (Pokemon.Pokemon_GetValue(mon, ParamIsEgg, null) == 0)
+            {
+                return slot;
+            }
+        }
+        return 0;
+    }
 }

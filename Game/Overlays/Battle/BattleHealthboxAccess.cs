@@ -14,6 +14,38 @@ public static partial class BattleSystems
         battleSys.SafariBalls = count;
     }
 
+    // OFFSET 0x0223EBF8
+    public static int BattleSystem_GetTime(BattleSystem battleSys)
+    {
+        return battleSys.Time;
+    }
+
+    // OFFSET 0x0223EDA4
+    public static Options? BattleSystem_GetOptions(BattleSystem battleSys)
+    {
+        return battleSys.Options;
+    }
+
+    // OFFSET 0x0223EF48
+    public static void BattleSystem_AddToPoketchHistory(BattleSystem battleSys, Pokemon mon)
+    {
+        if (battleSys.Poketch != null)
+        {
+            Poketch.Poketch_PokemonHistoryEnqueue(battleSys.Poketch, Pokemon.Pokemon_GetBoxPokemon(mon));
+        }
+    }
+
+    // OFFSET 0x0223F9A0
+    public static void BattleSystem_RegisterCaughtPokemon(BattleSystem battleSys, int battler)
+    {
+        int type = Battlers.Battler_GetType(battleSys.Battlers[battler]!);
+        if ((battleSys.BattleType & 0x84) == 0 && (type & 1) != 0)
+        {
+            int slot = BattleContexts.BattleContext_Get(battleSys, battleSys.BattleCtx!, 2, battler);
+            Pokedex.Pokedex_Capture(battleSys.Pokedex!, BattleSystem_GetPartyPokemon(battleSys, battler, slot));
+        }
+    }
+
     // OFFSET 0x0223F9E0
     public static int BattleSystem_CaughtSpecies(BattleSystem battleSys, int species)
     {

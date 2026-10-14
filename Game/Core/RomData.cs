@@ -23,6 +23,13 @@ public static class RomData
         return Rom.Read(arm9Offset + (address - arm9Address), length);
     }
 
+    public static string Arm9String(uint address)
+    {
+        byte[] raw = Arm9(address, 0x80);
+        int length = Array.IndexOf(raw, (byte)0);
+        return System.Text.Encoding.ASCII.GetString(raw, 0, length < 0 ? raw.Length : length);
+    }
+
     public static byte[] Overlay(int overlayID, uint address, int length)
     {
         return OverlaySystem.ReadData(overlayID, address, length);

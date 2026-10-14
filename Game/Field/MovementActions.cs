@@ -786,7 +786,7 @@ public static partial class MovementActions
     private static int MovementAction_RevealTrainer_Step0(MapObject mapObject)
     {
         MapObject_InitMovementData(mapObject, CounterDataSize);
-        OverworldAnimManager? hidingAnimManager = sub_0206A224(mapObject);
+        OverworldAnimManager? hidingAnimManager = MapObjectFollowMovement.MapObject_GetDisguiseAnimManager(mapObject);
         if (hidingAnimManager != null)
         {
             OverworldAnimManagers.OverworldAnimManager_Finish(hidingAnimManager);
@@ -815,7 +815,7 @@ public static partial class MovementActions
         offset.Y = 0;
         MapObject_SetSpriteJumpOffset(mapObject, offset);
         MapObject_SetStatusFlagOn(mapObject, StatusEndMovement | StatusMovementActionEnded | StatusEndJump);
-        sub_0206A230(mapObject);
+        MapObjectFollowMovement.MapObject_RevealDisguise(mapObject);
         MapObject_AdvanceMovementStep(mapObject);
         return 1;
     }

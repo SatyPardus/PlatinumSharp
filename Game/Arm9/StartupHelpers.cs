@@ -9,6 +9,9 @@ public static class PlayerAppearance
     private const int VariantsPerID = 4;
     private const int AppearancesPerGender = 8;
     private const int AppearanceEntryWords = 3;
+    public const int AppearanceFieldIndex = 0;
+    public const int AppearanceFieldTrainerClass = 1;
+    public const int AppearanceFieldTrainerClassArticle = 2;
 
     // OFFSET 0x0205C9BC
     public static int PlayerAppearance_GetByTrainerID(uint trainerID, uint gender, int index)
@@ -16,6 +19,23 @@ public static class PlayerAppearance
         uint variant = RomData.Arm9U32(VariantTable + (trainerID & 7) * (VariantsPerID * 4) + (uint)index * 4, 1)[0];
         uint row = gender * AppearancesPerGender + variant;
         return (int)RomData.Arm9U32(AppearanceTable + row * (AppearanceEntryWords * 4), 1)[0];
+    }
+
+    // OFFSET 0x0205CA14
+    public static int PlayerAppearance_GetData(uint gender, uint appearance, int field)
+    {
+        int index = PlayerAppearance_FindIndex(gender, appearance);
+        switch (field)
+        {
+            case AppearanceFieldIndex:
+                return index;
+            case AppearanceFieldTrainerClass:
+                return (int)RomData.Arm9U32(AppearanceTable + (uint)index * (AppearanceEntryWords * 4) + 8, 1)[0];
+            case AppearanceFieldTrainerClassArticle:
+                return (int)RomData.Arm9U32(AppearanceTable + (uint)index * (AppearanceEntryWords * 4) + 4, 1)[0];
+        }
+        ErrorHandling.GF_AssertFail();
+        return 0;
     }
 
     // OFFSET 0x0205C9E0

@@ -20,9 +20,9 @@ public sealed class FieldMenuManager
     public byte AnchorX;
     public byte AnchorY;
     public byte OptionsCount;
-    public ushort[]? SelectedOptionPtr;
-    public ushort[]? ListMenuListOffsetPtr;
-    public ushort[]? ListMenuCursorPosPtr;
+    public BufferView? SelectedOptionPtr;
+    public BufferView? ListMenuListOffsetPtr;
+    public BufferView? ListMenuCursorPosPtr;
     public readonly MenuTemplate MenuTemplate = new();
     public Menu? Menu;
     public readonly StringListEntry[] MenuChoicesStrings = Enumerable.Range(0, EntriesMax).Select(_ => new StringListEntry()).ToArray();
@@ -72,7 +72,7 @@ public static class FieldMenus
     }
 
     // OFFSET 0x021DC018
-    private static void FieldMenuManager_Init(FieldSystem fieldSystem, FieldMenuManager menuManager, byte anchorX, byte anchorY, byte initialCursorPos, byte canExitWithB, ushort[] selectedOptionPtr, StringTemplate? stringTemplate, Window? parentWindow, MessageLoader? messageLoader)
+    private static void FieldMenuManager_Init(FieldSystem fieldSystem, FieldMenuManager menuManager, byte anchorX, byte anchorY, byte initialCursorPos, byte canExitWithB, BufferView selectedOptionPtr, StringTemplate? stringTemplate, Window? parentWindow, MessageLoader? messageLoader)
     {
         if (messageLoader == null)
         {
@@ -87,7 +87,7 @@ public static class FieldMenus
         menuManager.StringTemplate = stringTemplate;
         menuManager.FieldSystem = fieldSystem;
         menuManager.SelectedOptionPtr = selectedOptionPtr;
-        menuManager.SelectedOptionPtr[0] = 0;
+        menuManager.SelectedOptionPtr.W16(0, 0);
         menuManager.ListMenuListOffsetPtr = null;
         menuManager.ListMenuCursorPosPtr = null;
         menuManager.CanExitWithB = (byte)(canExitWithB & 1);
@@ -115,11 +115,11 @@ public static class FieldMenus
         {
             menuManager.ChoicesStringsBuffers[i] = GameString.String_Init(0x50, HeapIDField);
         }
-        menuManager.SelectedOptionPtr[0] = NoSelectionYet;
+        menuManager.SelectedOptionPtr!.W16(0, NoSelectionYet);
     }
 
     // OFFSET 0x021DC150
-    public static FieldMenuManager FieldMenuManager_New(FieldSystem fieldSystem, byte anchorX, byte anchorY, byte initialCursorPos, byte canExitWithB, ushort[] selectedOptionPtr, StringTemplate? stringTemplate, Window? parentWindow, MessageLoader? messageLoader)
+    public static FieldMenuManager FieldMenuManager_New(FieldSystem fieldSystem, byte anchorX, byte anchorY, byte initialCursorPos, byte canExitWithB, BufferView selectedOptionPtr, StringTemplate? stringTemplate, Window? parentWindow, MessageLoader? messageLoader)
     {
         FieldMenuManager menuManager = new();
         FieldMenuManager_Init(fieldSystem, menuManager, anchorX, anchorY, initialCursorPos, canExitWithB, selectedOptionPtr, stringTemplate, parentWindow, messageLoader);
@@ -230,13 +230,13 @@ public static class FieldMenus
         {
             if (menuManager.CanExitWithB == 1)
             {
-                menuManager.SelectedOptionPtr![0] = MenuCancel;
+                menuManager.SelectedOptionPtr!.W16(0, MenuCancel);
                 FieldMenuManager_DeleteWithMenu(menuManager);
             }
         }
         else if (selectedEntry != MenuNothingChosen)
         {
-            menuManager.SelectedOptionPtr![0] = (ushort)selectedEntry;
+            menuManager.SelectedOptionPtr!.W16(0, (int)selectedEntry);
             FieldMenuManager_DeleteWithMenu(menuManager);
         }
     }
@@ -265,7 +265,7 @@ public static class FieldMenus
     }
 
     // OFFSET 0x021DC48C
-    public static FieldMenuManager FieldMenuManager_New2(FieldSystem fieldSystem, byte anchorX, byte anchorY, byte initialCursorPos, byte canExitWithB, ushort[] selectedOptionPtr, StringTemplate? stringTemplate, Window? parentWindow, MessageLoader? messageLoader)
+    public static FieldMenuManager FieldMenuManager_New2(FieldSystem fieldSystem, byte anchorX, byte anchorY, byte initialCursorPos, byte canExitWithB, BufferView selectedOptionPtr, StringTemplate? stringTemplate, Window? parentWindow, MessageLoader? messageLoader)
     {
         return FieldMenuManager_New(fieldSystem, anchorX, anchorY, initialCursorPos, canExitWithB, selectedOptionPtr, stringTemplate, parentWindow, messageLoader);
     }
@@ -327,14 +327,14 @@ public static class FieldMenus
     }
 
     // OFFSET 0x021DC600
-    public static void FieldMenuManager_ShowListMenuWithCursorPosition(FieldMenuManager menuManager, ushort[] listOffsetPtr, ushort[] cursorPosPtr)
+    public static void FieldMenuManager_ShowListMenuWithCursorPosition(FieldMenuManager menuManager, BufferView listOffsetPtr, BufferView cursorPosPtr)
     {
         uint menuWidth = PixelToTiles(FieldMenuManager_CalcListMenuWidth(menuManager));
         AddListMenuWindow(menuManager, menuWidth);
         menuManager.ListMenuListOffsetPtr = listOffsetPtr;
         menuManager.ListMenuCursorPosPtr = cursorPosPtr;
-        menuManager.CursorPos = (ushort)(menuManager.ListMenuListOffsetPtr[0] + menuManager.ListMenuCursorPosPtr[0]);
-        menuManager.ListMenu = ListMenu.ListMenu_New(menuManager.ListMenuTemplate, listOffsetPtr[0], cursorPosPtr[0], HeapIDField);
+        menuManager.CursorPos = (ushort)(menuManager.ListMenuListOffsetPtr.U16(0) + menuManager.ListMenuCursorPosPtr.U16(0));
+        menuManager.ListMenu = ListMenu.ListMenu_New(menuManager.ListMenuTemplate, listOffsetPtr.U16(0), cursorPosPtr.U16(0), HeapIDField);
         FieldMenuManager_UpdateListMenuAltText(menuManager);
         menuManager.SysTask = SysTask.SysTask_Start(FieldMenu_ListMenuSysTaskCallback, menuManager, 0);
     }
@@ -410,8 +410,8 @@ public static class FieldMenus
         ListMenu.ListMenu_GetListAndCursorPos(listMenu, out ushort listPos, out ushort cursorPos);
         if (menuManager.ListMenuListOffsetPtr != null && menuManager.ListMenuCursorPosPtr != null)
         {
-            menuManager.ListMenuListOffsetPtr[0] = listPos;
-            menuManager.ListMenuCursorPosPtr[0] = cursorPos;
+            menuManager.ListMenuListOffsetPtr.W16(0, listPos);
+            menuManager.ListMenuCursorPosPtr.W16(0, cursorPos);
         }
     }
 
@@ -445,14 +445,14 @@ public static class FieldMenus
             if (menuManager.CanExitWithB == 1)
             {
                 SoundPlayback.Sound_PlayEffect(SeqConfirm);
-                menuManager.SelectedOptionPtr![0] = MenuCancel;
+                menuManager.SelectedOptionPtr!.W16(0, MenuCancel);
                 FieldMenuManager_DeleteWithListMenu(menuManager);
             }
         }
         else if (input != MenuNothingChosen)
         {
             SoundPlayback.Sound_PlayEffect(SeqConfirm);
-            menuManager.SelectedOptionPtr![0] = (ushort)input;
+            menuManager.SelectedOptionPtr!.W16(0, (int)input);
             FieldMenuManager_DeleteWithListMenu(menuManager);
         }
     }
@@ -493,7 +493,7 @@ public static class FieldMenus
     }
 
     // OFFSET 0x021DCB24
-    public static void FieldMenu_ShowCurrentFloorWindow(FieldSystem fieldSystem, byte tilemapLeft, byte tilemapTop, ushort[] selectedOptionPtr, StringTemplate stringTemplate, ushort unused)
+    public static void FieldMenu_ShowCurrentFloorWindow(FieldSystem fieldSystem, byte tilemapLeft, byte tilemapTop, BufferView selectedOptionPtr, StringTemplate stringTemplate, ushort unused)
     {
         FieldMenuManager menuManager = FieldMenuManager_New(fieldSystem, tilemapLeft, tilemapTop, 0, 0, selectedOptionPtr, stringTemplate, null, null);
         uint width = PixelToTiles((uint)(Font.Font_GetAttribute(0, 0) << 3));
@@ -523,7 +523,7 @@ public static class FieldMenus
     private static void FieldMenu_CurrentFloorWindowSysTaskCallback(SysTask sysTask, object? param)
     {
         FieldMenuManager menuManager = (FieldMenuManager)param!;
-        if (menuManager.SelectedOptionPtr![0] != FloorWindowClose)
+        if (menuManager.SelectedOptionPtr!.U16(0) != FloorWindowClose)
         {
             return;
         }
@@ -699,7 +699,7 @@ public static class FieldMenus
     }
 
     // OFFSET 0x021DD250
-    public static FieldMenuManager FieldMenuManager_NewMoveTutorCostWindow(FieldSystem fieldSystem, byte anchorX, byte anchorY, ushort[] selectedOptionPtr, StringTemplate stringTemplate, byte redCost, byte blueCost, byte yellowCost, byte greenCost)
+    public static FieldMenuManager FieldMenuManager_NewMoveTutorCostWindow(FieldSystem fieldSystem, byte anchorX, byte anchorY, BufferView selectedOptionPtr, StringTemplate stringTemplate, byte redCost, byte blueCost, byte yellowCost, byte greenCost)
     {
         FieldMenuManager menuManager = FieldMenuManager_New(fieldSystem, anchorX, anchorY, 0, 0, selectedOptionPtr, stringTemplate, null, null);
         Bg.Window_Add(fieldSystem.BgConfig!, menuManager.MenuWindow, BgLayerMain3, menuManager.AnchorX, menuManager.AnchorY, 0xA, 0x10, MenuWindowPalette, MenuWindowBaseTile);

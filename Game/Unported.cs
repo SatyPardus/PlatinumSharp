@@ -22,7 +22,7 @@ public static partial class Unported
     public static int sub_020D09B8() => throw Missing(0x020D09B8);
     public static void sub_02079AF4(object pcBoxes, uint boxID, GameString dest) => throw Missing(0x02079AF4);
     public static uint sub_02099720(uint countryID) => throw Missing(0x02099720);
-    public static void sub_02075EF4(PokemonSpriteTemplate template, object mon, int face) => throw Missing(0x02075EF4);
+    public static void sub_02076300(PokemonSpriteTemplate template, ushort species, byte gender, int face, int shiny, int form, uint personality) => throw Missing(0x02076300);
     public static bool ScreenFadeFunc(uint address, ScreenFade fade) => throw Missing(address);
     public static int sub_020334A4() => throw Missing(0x020334A4);
     public static void sub_02033478() => throw Missing(0x02033478);
@@ -45,5 +45,4 @@ public static partial class Unported
     public static int sub_020765B8(object mon, int face) => throw Missing(0x020765B8);
     public static int sub_020A4498(byte[] friendKey) => throw Missing(0x020A4498);
     public static uint sub_02030698(object frontier, uint recordID, int index) => throw Missing(0x02030698);
-    public static void sub_0206D1B8(FieldSystem fieldSystem, CaptureAttempt? captureAttempt, int resultMask) => throw Missing(0x0206D1B8);
 }

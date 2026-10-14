@@ -304,7 +304,7 @@ public static class FieldWarpTransition
                 data.SubState++;
                 break;
             case 1:
-                if (ov5_021D4A24(fieldSystem, data.DoorAnimation, (byte)PlayerAvatar.PlayerAvatar_GetFacingDir(fieldSystem.PlayerAvatar!)) != 0)
+                if (DoorAnimations.FieldSystem_RunEscalatorExitAnimation(fieldSystem, data.DoorAnimation!, (byte)PlayerAvatar.PlayerAvatar_GetFacingDir(fieldSystem.PlayerAvatar!)) != 0)
                 {
                     DoorAnimations.DoorAnimation_Free(data.DoorAnimation);
                     data.SubState++;
@@ -490,7 +490,7 @@ public static class FieldWarpTransition
                 data.SubState++;
                 break;
             case 1:
-                if (ov5_021D4858(fieldSystem, data.DoorAnimation, (byte)PlayerAvatar.PlayerAvatar_GetFacingDir(fieldSystem.PlayerAvatar!)) != 0)
+                if (DoorAnimations.FieldSystem_RunEscalatorEnterAnimation(fieldSystem, data.DoorAnimation!, (byte)PlayerAvatar.PlayerAvatar_GetFacingDir(fieldSystem.PlayerAvatar!)) != 0)
                 {
                     DoorAnimations.DoorAnimation_Free(data.DoorAnimation);
                     data.SubState++;

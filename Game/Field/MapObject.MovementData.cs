@@ -3,6 +3,8 @@ namespace PlatinumSharp.Game;
 public sealed partial class MapObject
 {
     public OverworldAnimManager? MovementEmoteAnimManager;
+    public MapObject? MovementTypePartner;
+    public OverworldAnimManager? MovementTypeAnimManager;
     public readonly MapObjectBillboardSlot BerryPatchBillboardSlot = new();
     public readonly MapObjectBillboardState BerryPatchBillboardState = new();
 }

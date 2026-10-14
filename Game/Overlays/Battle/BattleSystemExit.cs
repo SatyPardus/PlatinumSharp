@@ -128,7 +128,7 @@ public static partial class Battle
     }
 
     // OFFSET 0x0223B3E4
-    private static void BattleSystem_FreeGraphics(BattleSystem battleSys)
+    public static void BattleSystem_FreeGraphics(BattleSystem battleSys)
     {
         GameSystem.SetVBlankCallback(null, null);
         BattleSubscreens.BattleSubscreen_Free(battleSys.BtlSubscreen!);

@@ -18,6 +18,9 @@ public static partial class MapObjectDrawHandlers
             case 0x021EC554:
                 Player_DrawWalkInPlace(mapObject);
                 return true;
+            case 0x021EC5C0:
+                Player_DrawStateToggleAnim(mapObject);
+                return true;
         }
         return false;
     }
@@ -114,5 +117,27 @@ public static partial class MapObjectDrawHandlers
         FinishPlayerPose(mapObject, billboard);
         drawData.LastDir = (sbyte)dir;
         drawData.LastDrawState = (sbyte)MapObject.MapObject_GetDrawState(mapObject);
+    }
+
+    // OFFSET 0x021EC5C0
+    public static void Player_DrawStateToggleAnim(MapObject mapObject)
+    {
+        Billboard? billboard = GetSpriteDrawData(mapObject).Slot.Billboard;
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        if (MapObjectRenderResources.MapObject_IsBillboardPending(mapObject) == 1 || billboard == null)
+        {
+            return;
+        }
+        int dir = MapObject.MapObject_GetFacingDir(mapObject);
+        int drawState = MapObject.MapObject_GetDrawState(mapObject);
+        if (drawState != drawData.LastDrawState)
+        {
+            Billboards.Billboard_SetAnimNum(billboard, drawState == 0 ? 0 : 1);
+            Billboards.Billboard_SetAnimFrameNum(billboard, 0);
+        }
+        Billboards.Billboard_AdvanceAnim(billboard, Fx32.One);
+        drawData.LastDir = (sbyte)dir;
+        drawData.LastDrawState = (sbyte)drawState;
+        FinishPlayerPose(mapObject, billboard);
     }
 }

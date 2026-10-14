@@ -38,7 +38,9 @@ public static class FieldSystemVarsFlags
         }
         if (varID < SpecialVarFirst)
         {
-            return new BufferView(varsFlags.Buffer, varsFlags.Offset + VarsFlags.VarsFlags_GetVarOffset(varsFlags, varID));
+            BufferView view = new BufferView(varsFlags.Buffer, varsFlags.Offset + VarsFlags.VarsFlags_GetVarOffset(varsFlags, varID));
+            ScriptTrace.OnVarRead(varID, view.U16(0));
+            return view;
         }
         return ScriptManager.FieldSystem_GetScriptMemberPtr(fieldSystem, varID - SpecialVarMemberBias);
     }

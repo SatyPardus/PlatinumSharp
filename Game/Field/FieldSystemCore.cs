@@ -328,7 +328,7 @@ public static class FieldSystemCore
         object? poketchSystem = FieldSystem_GetPoketchSystem();
         if (poketchSystem != null)
         {
-            poketchTapped = ov25_02253DD4(poketchSystem);
+            poketchTapped = PoketchSystems.PoketchSystem_IsTapped((PoketchSystem)poketchSystem) ? 1 : 0;
         }
         PlayerMove.PlayerAvatar_MoveMain(fieldSystem.PlayerAvatar, fieldSystem.LandDataManager, DirectionNone, input.PressedKeys, input.HeldKeys, poketchTapped);
     }

@@ -54,7 +54,9 @@ public sealed class VarsFlags : RawSaveBlock
         {
             return false;
         }
-        return (chunk[index] & (1 << (flagID % 8))) != 0;
+        bool set = (chunk[index] & (1 << (flagID % 8))) != 0;
+        ScriptTrace.OnFlagRead(flagID, set);
+        return set;
     }
 
     // OFFSET 0x0205081C
@@ -231,7 +233,6 @@ public sealed class FieldPlayerState : RawSaveBlock
 {
     public const int Size = 0xA0;
 
-    private const int WeatherOffset = 0x68;
     private const int WarpOffset = 0x6C;
     private const int WarpEntryCount = 6;
     private const int PlayerDataOffset = 0x8C;
@@ -247,7 +248,7 @@ public sealed class FieldPlayerState : RawSaveBlock
         state.Clear(0, Size);
         FieldPlayerState_InitWarps(state, WarpOffset);
         FieldPlayerState_InitPlayerData(state, PlayerDataOffset);
-        state.W16(WeatherOffset, FieldPlayerState_DefaultWeather());
+        state.W16(BlackOutWarpIdOffset, FieldPlayerState_DefaultBlackOutWarpId());
     }
 
     public const int LocationSize = 0x14;
@@ -396,7 +397,7 @@ public sealed class FieldPlayerState : RawSaveBlock
     }
 
     // OFFSET 0x0203A7EC
-    private static int FieldPlayerState_DefaultWeather()
+    public static int FieldPlayerState_DefaultBlackOutWarpId()
     {
         return 1;
     }

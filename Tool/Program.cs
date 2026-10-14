@@ -859,6 +859,29 @@ switch (args[0])
                 }
             }
         }
+        void SaveShot(string shotName) => SaveFrame(Path.Combine(PlatinumSharp.Game.ProjectPaths.Shots, $"hl_{shotName}.png"));
+        void SaveFrame(string target)
+        {
+            Raster shot = new(256, 384);
+            int[] screen = new int[256 * 192];
+            bool mainOnTop = (PlatinumSharp.Game.Video.PowerControl & 0x8000) != 0;
+            for (int display = 0; display < 2; display++)
+            {
+                PlatinumSharp.Game.Rasterizer.LayerMask = 0x1F;
+                PlatinumSharp.Game.Rasterizer.Render(display, screen);
+                PlatinumSharp.Game.Rasterizer.ApplyMasterBrightness(display, screen);
+                int top = (display == 0) == mainOnTop ? 0 : 192;
+                Array.Copy(screen, 0, shot.Pixels, top * 256, screen.Length);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            string temp = target + ".tmp";
+            Renderer.SavePng(shot, temp);
+            File.Move(temp, target, true);
+        }
+        const int LiveFrameInterval = 6;
+        string LiveFramePath = Path.Combine(PlatinumSharp.Game.ProjectPaths.DashboardLive, "frame.png");
+        string LiveStatusPath = Path.Combine(PlatinumSharp.Game.ProjectPaths.DashboardLive, "status.json");
+        PlatinumSharp.Game.TestScript.Screenshot = SaveShot;
         PlatinumSharp.Game.Interrupts.WaitHook = waitMask =>
         {
             if ((waitMask & PlatinumSharp.Game.Interrupts.VBlank) == 0)
@@ -869,19 +892,20 @@ switch (args[0])
             frames++;
             if (shotFrames.Contains(frames))
             {
-                Raster shot = new(256, 384);
-                int[] screen = new int[256 * 192];
-                bool mainOnTop = (PlatinumSharp.Game.Video.PowerControl & 0x8000) != 0;
-                for (int display = 0; display < 2; display++)
+                SaveShot(frames.ToString());
+            }
+            if (frames % LiveFrameInterval == 0)
+            {
+                try
                 {
-                    PlatinumSharp.Game.Rasterizer.LayerMask = 0x1F;
-                    PlatinumSharp.Game.Rasterizer.Render(display, screen);
-                    PlatinumSharp.Game.Rasterizer.ApplyMasterBrightness(display, screen);
-                    int top = (display == 0) == mainOnTop ? 0 : 192;
-                    Array.Copy(screen, 0, shot.Pixels, top * 256, screen.Length);
+                    SaveFrame(LiveFramePath);
+                    string liveStatus = testScript?.Status ?? "headless boot";
+                    File.WriteAllText(LiveStatusPath + ".tmp", System.Text.Json.JsonSerializer.Serialize(new { frame = frames, status = liveStatus, time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }));
+                    File.Move(LiveStatusPath + ".tmp", LiveStatusPath, true);
                 }
-                Directory.CreateDirectory(@"E:\Poketest\tools\tests\shots");
-                Renderer.SavePng(shot, $@"E:\Poketest\tools\tests\shots\hl_{frames}.png");
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                }
             }
             int held = 0;
             foreach ((int Frame, int Keys) press in presses)

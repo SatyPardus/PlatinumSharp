@@ -21,6 +21,55 @@ public static partial class Battle
     private const int FontPaletteMember = 7;
     private const uint ParticleTextureVramSize = 0x8000;
     private const uint ParticlePaletteVramSize = 0xC0;
+    private const uint BattleRestoreBgTemplates = 0x0226E3A4;
+
+    // OFFSET 0x0223B53C
+    public static void BattleSystem_FreeMainBackgrounds(BattleSystem battleSys)
+    {
+        Bg.Window_Remove(battleSys.Windows![0]);
+        GXLayers.GXLayers_EngineAToggleLayers(1, 0);
+        GXLayers.GXLayers_EngineAToggleLayers(2, 0);
+        Bg.Bg_FreeTilemapBuffer(battleSys.BgConfig!, 1);
+        Bg.Bg_FreeTilemapBuffer(battleSys.BgConfig!, 2);
+        Bg.Bg_FreeTilemapBuffer(battleSys.BgConfig!, 3);
+        BattleSystem_HideHealthboxes(battleSys);
+    }
+
+    // OFFSET 0x0223B578
+    public static void BattleSystem_RestoreMainBackgrounds(BattleSystem battleSys)
+    {
+        battleSys.PendingBlendReset = 1;
+        BgConfig bgConfig = battleSys.BgConfig!;
+        byte[] templates = RomData.Overlay(OverlayBattle, BattleRestoreBgTemplates, RomStructs.BgTemplateSize * 3);
+        for (int layer = 1; layer <= 3; layer++)
+        {
+            Bg.Bg_InitFromTemplate(bgConfig, layer, RomStructs.BgTemplate(templates, (layer - 1) * RomStructs.BgTemplateSize), 0);
+            Bg.Bg_ClearTilemap(bgConfig, layer);
+        }
+        Video.SetBgControl(0, (ushort)((Video.GetBgControl(0) & ~3) | 1));
+        GXLayers.GXLayers_EngineAToggleLayers(1, 1);
+        int frame = BattleSystems.BattleSystem_GetOptionsFrame(battleSys);
+        RenderWindow.ReplaceTransparentTiles(bgConfig, 1, MessageBoxTileStart, MessageBoxPalette, (byte)frame, HeapIDBattle);
+        Graphics.Graphics_LoadTilesToBgLayer(NarcBattleGraphics, (uint)(battleSys.Background + BackgroundTilesMemberBase), bgConfig, 3, 0, 0, 1, HeapIDBattle);
+        int timeOffset = BattleSystems.BattleSystem_GetBackgroundTimeOffset(battleSys);
+        PaletteData.PaletteData_LoadBufferFromFileStart(battleSys.PaletteData!, NarcBattleGraphics, BackgroundPaletteMemberBase + battleSys.Background * 3 + timeOffset, HeapIDBattle, PaletteBufferMainBg, 0, 0);
+        PaletteData.PaletteData_LoadBufferFromFileStart(battleSys.PaletteData!, NarcMessageBoxFrames, (int)RenderWindow.GetMessageBoxPaletteNARCMember((uint)frame), HeapIDBattle, PaletteBufferMainBg, 0x20, 0xA0);
+        PaletteData.PaletteData_LoadBufferFromFileStart(battleSys.PaletteData!, NarcFontPalettes, FontPaletteMember, HeapIDBattle, PaletteBufferMainBg, 0x20, 0xB0);
+        Graphics.Graphics_LoadTilemapToBgLayer(NarcBattleGraphics, BackgroundTilemapMember, bgConfig, 3, 0, 0, 1, HeapIDBattle);
+        Video.SetVisibleWindows(DisplayMain, 0);
+        Video.SetVisibleWindows(DisplaySub, 0);
+        Video.SetWindowInside(DisplayMain, 0, 0);
+        Video.SetWindowOutside(DisplayMain, 0);
+        GXLayers.GXLayers_TurnBothDispOn();
+        GXLayers.GXLayers_EngineAToggleLayers(0x10, 1);
+        GXLayers.GXLayers_EngineBToggleLayers(0x10, 1);
+        GameSystem.SetVBlankCallback(BattleSystem_VBlankCallback, battleSys);
+        battleSys.PendingBattleVRAMSetup = 1;
+        Bg.Window_Add(bgConfig, battleSys.Windows![0], 1, 2, 0x13, 0x1B, 4, 0xB, 0x1F);
+        Bg.Window_FillTilemap(battleSys.Windows[0], 0xFF);
+        RenderWindow.Window_DrawMessageBoxWithScrollCursor(battleSys.Windows[0], 0, 1, 0xA);
+        BattleSystems.BattleSystem_SetTextRenderFlags(battleSys);
+    }
 
     // OFFSET 0x0223C004
     private static void BattleSystem_InitBackgrounds(BattleSystem battleSys, BgConfig bgConfig)

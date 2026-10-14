@@ -1480,7 +1480,7 @@ public sealed partial class MapObject
             default:
                 return mapObject =>
                 {
-                    if (!MapObjectDrawHandlers.Dispatch(address, mapObject) && !MapObjectMovementTypes.Dispatch(address, mapObject))
+                    if (!MapObjectDrawHandlers.Dispatch(address, mapObject) && !MapObjectMovementTypes.Dispatch(address, mapObject) && !MapObjectFollowMovement.Dispatch(address, mapObject))
                     {
                         MapObjectCallback(address, mapObject);
                     }

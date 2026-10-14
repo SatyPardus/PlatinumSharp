@@ -322,6 +322,9 @@ public sealed class Mail
 
 public sealed class Mailbox : ISaveBlock
 {
+    private const int MonDataMail = 0xAA;
+    private const int MonDataHeldItem = 6;
+
     public const int SlotCount = 20;
     public const int GroupMailbox = 0;
     public const int NoSlot = -1;
@@ -470,4 +473,23 @@ public sealed class Mailbox : ISaveBlock
         }
         return mail;
     }
+
+    // OFFSET 0x02097788
+    public static int Mailbox_MoveMailFromPokemon(Mailbox mailbox, Pokemon mon, int heapID)
+    {
+        uint noItem = 0;
+        int slot = Mailbox_FindEmptySlot(mailbox, 0);
+        if (slot == -1)
+        {
+            return slot;
+        }
+        Mail mail = Mail.Mail_New(heapID);
+        Pokemon.Pokemon_GetValue(mon, MonDataMail, mail);
+        Mailbox_SetSlot(mailbox, 0, slot, mail);
+        Mail.Mail_Init(mail);
+        Pokemon.Pokemon_SetValue(mon, MonDataMail, mail);
+        Pokemon.Pokemon_SetValue(mon, MonDataHeldItem, noItem);
+        return slot;
+    }
 }
+

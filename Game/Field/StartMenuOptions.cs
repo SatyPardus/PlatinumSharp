@@ -166,7 +166,7 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D390(fieldSystem, menu.FieldMoveContext, 0);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenPartyMenu(fieldSystem, menu.FieldMoveContext, 0);
         menu.Callback = StartMenu_ExitPartyMenu;
         return false;
     }
@@ -211,9 +211,9 @@ public sealed partial class StartMenu
                 summary.DexMode = (uint)DexMode.SaveData_GetDexMode(fieldSystem.SaveData!);
                 summary.ShowContest = PokemonSummaryShared.PokemonSummaryScreen_ShowContestData(fieldSystem.SaveData!);
                 summary.ChatotCry = null;
-                sub_0208D720(summary, RomData.Arm9(SummaryPagesAllAddress, SummaryPagesAllCount));
-                sub_0208E9C0(summary, PlayerSave.SaveData_GetTrainerInfo(fieldSystem.SaveData!));
-                sub_0203D334(fieldSystem, summary);
+                PokemonSummaryScreenApp.PokemonSummaryScreen_FlagVisiblePages(summary, RomData.Arm9(SummaryPagesAllAddress, SummaryPagesAllCount));
+                PokemonSummaryScreenApp.PokemonSummaryScreen_SetPlayerProfile(summary, PlayerSave.SaveData_GetTrainerInfo(fieldSystem.SaveData!));
+                FieldSystemChildProcesses.FieldSystem_OpenSummaryScreen(fieldSystem, summary);
                 menu.TaskData = summary;
                 StartMenu_SetCallback(menu, StartMenu_ExitSummary);
                 break;
@@ -271,8 +271,8 @@ public sealed partial class StartMenu
                 Bag bag = BagItems.SaveData_GetBag(fieldSystem.SaveData!);
                 PlayerSave.SaveData_GetTrainerInfo(fieldSystem.SaveData!);
                 menu.TaskData = BagItems.Bag_CreateContextWithPockets(bag, RomData.Arm9(BagPocketsAddress, BagPocketsCount), HeapIDFieldTask);
-                sub_0207CB2C(menu.TaskData, fieldSystem.SaveData!, 1, fieldSystem.BagCursor);
-                sub_0203D1E4(fieldSystem, menu.TaskData);
+                BagContext.BagContext_Init((BagContext)menu.TaskData, fieldSystem.SaveData!, 1, fieldSystem.BagCursor);
+                FieldSystemChildProcesses.FieldSystem_StartBagApplication(fieldSystem, (BagContext)menu.TaskData!);
                 StartMenu_SetCallback(menu, StartMenu_ExitBag);
                 break;
             }
@@ -301,7 +301,7 @@ public sealed partial class StartMenu
                 break;
             }
             case PartyResultOpenBag:
-                menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+                menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
                 StartMenu_SetCallback(menu, StartMenu_ExitBag);
                 break;
             case >= PartyResultFirstFieldMove and <= PartyResultLastFieldMove:
@@ -310,7 +310,7 @@ public sealed partial class StartMenu
                 context.FieldMove = (ushort)(partyMenu.MenuSelectionResult - PartyResultFirstFieldMove);
                 context.SelectedMonSlot = partyMenu.SelectedMonSlot;
                 context.Task = task;
-                FieldMoveTaskFunc function = sub_0207070C(0, context.FieldMove);
+                FieldMoveTaskFunc function = FieldMoveTasks.FieldMove_GetTaskFunc(context.FieldMove);
                 function(context, menu.FieldMoveContext);
                 break;
             }
@@ -321,20 +321,20 @@ public sealed partial class StartMenu
                     || partyMenu.Mode == PartyMenuModeUseItemDone
                     || partyMenu.Mode == PartyMenuModeLevelUpMove)
                 {
-                    menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+                    menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
                     if (partyMenu.SelectedMonSlot >= PartyMenu.MaxPartySize)
                     {
-                        sub_0207CB70(menu.TaskData, 0);
+                        BagContext.BagContext_SetSelectedMonSlot((BagContext)menu.TaskData!, 0);
                     }
                     else
                     {
-                        sub_0207CB70(menu.TaskData, partyMenu.SelectedMonSlot);
+                        BagContext.BagContext_SetSelectedMonSlot((BagContext)menu.TaskData!, partyMenu.SelectedMonSlot);
                     }
                     StartMenu_SetCallback(menu, StartMenu_ExitBag);
                 }
                 else if (partyMenu.Mode == PartyMenuModeGiveItem)
                 {
-                    menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+                    menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
                     StartMenu_SetCallback(menu, StartMenu_ExitBag);
                 }
                 else
@@ -356,9 +356,9 @@ public sealed partial class StartMenu
         summary.DexMode = (uint)DexMode.SaveData_GetDexMode(fieldSystem.SaveData!);
         summary.ShowContest = PokemonSummaryShared.PokemonSummaryScreen_ShowContestData(fieldSystem.SaveData!);
         summary.ChatotCry = null;
-        sub_0208D720(summary, RomData.Arm9(SummaryPagesMovesAddress, SummaryPagesMovesCount));
-        sub_0208E9C0(summary, PlayerSave.SaveData_GetTrainerInfo(fieldSystem.SaveData!));
-        sub_0203D334(fieldSystem, summary);
+        PokemonSummaryScreenApp.PokemonSummaryScreen_FlagVisiblePages(summary, RomData.Arm9(SummaryPagesMovesAddress, SummaryPagesMovesCount));
+        PokemonSummaryScreenApp.PokemonSummaryScreen_SetPlayerProfile(summary, PlayerSave.SaveData_GetTrainerInfo(fieldSystem.SaveData!));
+        FieldSystemChildProcesses.FieldSystem_OpenSummaryScreen(fieldSystem, summary);
         return summary;
     }
 
@@ -377,10 +377,10 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
-        sub_0207CB70(menu.TaskData, 0);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
+        BagContext.BagContext_SetSelectedMonSlot((BagContext)menu.TaskData!, 0);
         menu.Callback = StartMenu_ExitBag;
-        ov5_021E2064(fieldSystem);
+        FieldSave.FieldSystem_SaveStateIfCommunicationOff(fieldSystem);
         return false;
     }
 
@@ -390,27 +390,27 @@ public sealed partial class StartMenu
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
         object? bagContext = menu.TaskData;
-        switch (sub_0207CB9C(bagContext))
+        switch (BagContext.BagContext_GetExitCode((BagContext)bagContext!))
         {
             case BagExitUseItem:
             {
                 ItemMenuUseContext context = new();
-                context.Item = sub_0207CB94(bagContext);
-                context.SelectedMonSlot = sub_0207CBA4(bagContext);
+                context.Item = BagContext.BagContext_GetItem((BagContext)bagContext!);
+                context.SelectedMonSlot = BagContext.BagContext_GetSelectedMonSlot((BagContext)bagContext!);
                 context.Task = task;
                 uint index = (uint)Item.Item_LoadParam(context.Item, ItemParamFieldUseFunc, HeapIDFieldTask);
-                ItemMenuUseFunc function = sub_020683F4(0, (ushort)index);
+                ItemMenuUseFunc function = (ItemMenuUseFunc)ItemUseFunctions.GetItemUseFunction(0, (ushort)index)!;
                 function(context, menu.ItemUseContext);
                 break;
             }
             case BagExitBerryTag:
-                StartMenu_ShowBerryTag(task, sub_0207CB94(bagContext));
+                StartMenu_ShowBerryTag(task, BagContext.BagContext_GetItem((BagContext)bagContext!));
                 break;
             case BagExitGiveItem:
             {
                 PartyMenu partyMenu = NewPartyMenu(fieldSystem, menu);
                 partyMenu.Mode = PartyMenuModeGiveItem;
-                partyMenu.UsedItemID = sub_0207CB94(bagContext);
+                partyMenu.UsedItemID = BagContext.BagContext_GetItem((BagContext)bagContext!);
                 partyMenu.FieldSystem = fieldSystem;
                 FieldSystemCore.FieldSystem_StartChildProcess(fieldSystem, ApplicationTemplate.At(PartyMenuTemplate), partyMenu);
                 menu.TaskData = partyMenu;
@@ -421,7 +421,7 @@ public sealed partial class StartMenu
             {
                 Party party = Party.SaveData_GetParty(fieldSystem.SaveData!);
                 int slot = ((StartMenuPartySlot)menu.AdditionalTaskData!).Slot;
-                ushort item = sub_0207CB94(bagContext);
+                ushort item = BagContext.BagContext_GetItem((BagContext)bagContext!);
                 Pokemon mon = Party.Party_GetPokemonBySlotIndex(party, slot);
                 menu.AdditionalTaskData = null;
                 if (Item.Item_IsMail(item) == 1 && Pokemon.Pokemon_GetValue(mon, MonDataHeldItem, null) == 0)
@@ -440,7 +440,7 @@ public sealed partial class StartMenu
                     partyMenu.Options = PlayerSave.SaveData_GetOptions(fieldSystem.SaveData!);
                     partyMenu.FieldMoveContext = menu.FieldMoveContext;
                     partyMenu.Type = 0;
-                    partyMenu.UsedItemID = sub_0207CB94(bagContext);
+                    partyMenu.UsedItemID = BagContext.BagContext_GetItem((BagContext)bagContext!);
                     partyMenu.SelectedMonSlot = (byte)slot;
                     partyMenu.FieldSystem = fieldSystem;
                     if (partyMenu.UsedItemID == 0)
@@ -480,9 +480,9 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_02071F04(HeapIDFieldTask);
-        sub_02071D40(1, 1, 0, 0xFF, fieldSystem, menu.TaskData);
-        sub_0203E09C(fieldSystem, menu.TaskData);
+        menu.TaskData = TrainerCase.TrainerCase_New(HeapIDFieldTask);
+        TrainerCase.TrainerCase_Init(1, 1, 0, 0xFF, fieldSystem, (TrainerCase)menu.TaskData);
+        FieldSystemChildProcesses.FieldSystem_OpenTrainerCaseApp(fieldSystem, (TrainerCase)menu.TaskData);
         menu.Callback = StartMenu_ExitTrainerCase;
         return false;
     }
@@ -492,8 +492,8 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        sub_020721D4(fieldSystem, menu.TaskData);
-        sub_02071F20(menu.TaskData);
+        TrainerCase.TrainerCase_SaveBadgePolish(fieldSystem, (TrainerCase)menu.TaskData!);
+        TrainerCase.TrainerCase_Free((TrainerCase)menu.TaskData!);
         FieldTask.FieldSystem_StartFieldMap(fieldSystem);
         menu.State = StateReinit;
         return false;
@@ -569,7 +569,7 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D8EC(fieldSystem);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenOptionsMenu(fieldSystem);
         menu.Callback = StartMenu_ExitOptions;
         return false;
     }
@@ -688,7 +688,7 @@ public sealed partial class StartMenu
         }
         else
         {
-            menu.TaskData = sub_0203D390(fieldSystem, menu.FieldMoveContext, summary.MonIndex);
+            menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenPartyMenu(fieldSystem, menu.FieldMoveContext, summary.MonIndex);
             StartMenu_SetCallback(menu, StartMenu_ExitPartyMenu);
         }
         return false;
@@ -725,7 +725,7 @@ public sealed partial class StartMenu
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
         sub_02097390(menu.TaskData, out byte scroll, out byte index);
         BagCursor.BagCursor_SetFieldPocketPosition(fieldSystem.BagCursor!, BerryPocket, index, scroll);
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         return false;
     }
@@ -735,7 +735,7 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         return false;
     }
@@ -750,7 +750,7 @@ public sealed partial class StartMenu
         TownMapContext townMap = (TownMapContext)menu.TaskData!;
         if (townMap.FlyLocationSelected == 0)
         {
-            menu.TaskData = sub_0203D390(fieldSystem, menu.FieldMoveContext, (byte)slot);
+            menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenPartyMenu(fieldSystem, menu.FieldMoveContext, (byte)slot);
             StartMenu_SetCallback(menu, StartMenu_ExitPartyMenu);
         }
         else
@@ -774,7 +774,7 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         return false;
     }
@@ -799,12 +799,12 @@ public sealed partial class StartMenu
         {
             case MailReadFromBag:
                 sub_02097770(menu.TaskData);
-                menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+                menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
                 StartMenu_SetCallback(menu, StartMenu_ExitBag);
                 break;
             case MailReadFromPartyMenu:
                 sub_02097770(menu.TaskData);
-                menu.TaskData = sub_0203D390(fieldSystem, menu.FieldMoveContext, data.PartySlot);
+                menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenPartyMenu(fieldSystem, menu.FieldMoveContext, data.PartySlot);
                 StartMenu_SetCallback(menu, StartMenu_ExitPartyMenu);
                 break;
             case MailGiveFromPartyMenu:
@@ -815,7 +815,7 @@ public sealed partial class StartMenu
                 else
                 {
                     sub_02097770(menu.TaskData);
-                    menu.TaskData = sub_0203D390(fieldSystem, menu.FieldMoveContext, data.PartySlot);
+                    menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenPartyMenu(fieldSystem, menu.FieldMoveContext, data.PartySlot);
                     StartMenu_SetCallback(menu, StartMenu_ExitPartyMenu);
                 }
                 break;
@@ -827,7 +827,7 @@ public sealed partial class StartMenu
                 else
                 {
                     sub_02097770(menu.TaskData);
-                    menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+                    menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
                     StartMenu_SetCallback(menu, StartMenu_ExitBag);
                 }
                 break;
@@ -859,7 +859,7 @@ public sealed partial class StartMenu
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
         sub_02098AF0(menu.TaskData);
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         return false;
     }
@@ -869,7 +869,7 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         return false;
     }
@@ -879,7 +879,7 @@ public sealed partial class StartMenu
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(task);
         StartMenu menu = (StartMenu)FieldTask.FieldTask_GetEnv(task)!;
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         return false;
     }
@@ -931,8 +931,8 @@ public sealed partial class StartMenu
         SoundPlayback.Sound_StopBGM(BgmEvolution, 0);
         Sound.Sound_SetScene(0);
         FieldBgm.FieldBGM_PlayEffectiveForMapHeader(fieldSystem, (int)fieldSystem.Location!.U32(0));
-        menu.TaskData = sub_0203D20C(fieldSystem, menu.ItemUseContext);
-        sub_0207CB70(menu.TaskData, (byte)((StartMenuPartySlot)menu.AdditionalTaskData!).Slot);
+        menu.TaskData = FieldSystemChildProcesses.FieldSystem_OpenBag(fieldSystem, menu.ItemUseContext);
+        BagContext.BagContext_SetSelectedMonSlot((BagContext)menu.TaskData!, (byte)((StartMenuPartySlot)menu.AdditionalTaskData!).Slot);
         menu.AdditionalTaskData = null;
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
     }

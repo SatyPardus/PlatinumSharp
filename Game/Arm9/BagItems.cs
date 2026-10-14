@@ -362,14 +362,14 @@ public static class BagItems
     }
 
     // OFFSET 0x0207D824
-    public static object? Bag_CreateContextWithPockets(Bag bag, byte[] pockets, int heapID)
+    public static BagContext Bag_CreateContextWithPockets(Bag bag, byte[] pockets, int heapID)
     {
-        object? context = sub_0207CB08((byte)heapID);
+        BagContext context = BagContext.BagContext_New((byte)heapID);
         for (int i = 0; pockets[i] != PocketListEnd; i++)
         {
             if (PocketRange(pockets[i], out int offset, out _))
             {
-                sub_0207CB48(context, new BufferView(bag.Buffer, bag.Offset + offset), pockets[i], (byte)i);
+                BagContext.BagContext_InitPocket(context, new BufferView(bag.Buffer, bag.Offset + offset), pockets[i], (byte)i);
             }
         }
         return context;

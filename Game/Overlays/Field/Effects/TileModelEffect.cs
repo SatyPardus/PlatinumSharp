@@ -129,7 +129,7 @@ public static class TileModelEffect
         MapObject mapObject = context.MapObject!;
         if (MapObject.MapObject_IsLocalObjectOfMap(mapObject, context.LocalID, context.MapHeaderID) == 1)
         {
-            sub_0206A218(mapObject, null);
+            MapObjectFollowMovement.MapObject_SetDisguiseAnimManager(mapObject, null);
         }
     }
 

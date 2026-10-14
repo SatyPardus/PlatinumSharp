@@ -10,7 +10,7 @@ public sealed class VsSeekerSystem
     public readonly MapObject?[] NPCs = new MapObject?[MaxNPCs];
     public ushort NumNPCs;
     public ushort NumActiveAnimations;
-    public ushort[]? Result;
+    public BufferView? Result;
     public StringTemplate? Template;
     public SysTask? PlayerStateTask;
 }
@@ -72,7 +72,7 @@ public static class VsSeeker
     private static readonly int[] FacingRematchMoveCodes = { 0xE, 0xF, 0x10, 0x11 };
 
     // OFFSET 0x021DB888
-    public static void VsSeeker_Start(FieldTask taskMan, StringTemplate template, ushort[] outResult)
+    public static void VsSeeker_Start(FieldTask taskMan, StringTemplate template, BufferView outResult)
     {
         FieldSystem fieldSystem = FieldTask.FieldTask_GetFieldSystem(taskMan);
         VsSeekerSystem vsSeeker = new();
@@ -101,17 +101,17 @@ public static class VsSeeker
                 int usability = VsSeekerSystem_CheckUsability(vsSeeker);
                 if (usability == UsabilityOK)
                 {
-                    vsSeeker.Result![0] = ResultOK;
+                    vsSeeker.Result!.W16(0, ResultOK);
                     VsSeekerSystem_SetState(vsSeeker, StateStart);
                 }
                 else if (usability == UsabilityNoBattery)
                 {
-                    vsSeeker.Result![0] = ResultNoBattery;
+                    vsSeeker.Result!.W16(0, ResultNoBattery);
                     VsSeekerSystem_SetState(vsSeeker, StateNoBattery);
                 }
                 else
                 {
-                    vsSeeker.Result![0] = ResultNoTrainers;
+                    vsSeeker.Result!.W16(0, ResultNoTrainers);
                     VsSeekerSystem_SetState(vsSeeker, StateNoTrainers);
                 }
                 break;
@@ -131,7 +131,7 @@ public static class VsSeeker
             case StatePickRematchTrainers:
                 if (VsSeekerSystem_PickRematchTrainers(vsSeeker) == 0)
                 {
-                    vsSeeker.Result![0] = ResultNoTrainersPicked;
+                    vsSeeker.Result!.W16(0, ResultNoTrainersPicked);
                 }
                 VsSeekerSystem_SetState(vsSeeker, StateWaitForRematchAnims);
                 break;

@@ -11,8 +11,8 @@ namespace PlatinumSharp.ScriptPlayer;
 
 internal static class Program
 {
-    public const string DefaultRom = @"E:\Poketest\Pokemon - Platinum Version (Europe).nds";
-    public const string DataPath = @"E:\Poketest\tools\scriptdata.json";
+    public static readonly string? DefaultRom = PlatinumSharp.Game.ProjectPaths.DefaultRom;
+    public static readonly string DataPath = PlatinumSharp.Game.ProjectPaths.ScriptData;
 
     [STAThread]
     private static int Main(string[] args)

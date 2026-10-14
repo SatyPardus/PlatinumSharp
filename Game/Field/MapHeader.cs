@@ -4,6 +4,8 @@ namespace PlatinumSharp.Game;
 
 public static class MapHeader
 {
+    private const int MapNameNarc = 0x1A;
+    private const int MapNameBank = 0x1B1;
     public const int Count = 0x251;
     public const int EncountersNone = 0xFFFF;
 
@@ -303,5 +305,13 @@ public static class MapHeader
             }
         }
         return 0;
+    }
+
+    // OFFSET 0x02071D10
+    public static void MapHeader_LoadName(int mapHeaderID, int heapID, GameString dst)
+    {
+        MessageLoader loader = MessageLoader.MessageLoader_Init(1, MapNameNarc, MapNameBank, heapID)!;
+        LocationName.LocationName_LoadAndGetWidth(loader, MapHeader_GetMapLabelTextID(mapHeaderID), dst);
+        MessageLoader.MessageLoader_Free(loader);
     }
 }

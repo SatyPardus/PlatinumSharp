@@ -208,7 +208,7 @@ public static class Rasterizer
                 {
                     result = Blend(topColor, secondColor, eva, evb);
                 }
-                else if (topLayer == 0 && bg03D && bg0Alpha[x] < 31 && secondOk && (firstTargets & 1) != 0)
+                else if (topLayer == 0 && bg03D && secondOk)
                 {
                     int alpha = bg0Alpha[x] + 1;
                     result = Blend(topColor, secondColor, alpha >> 1, 16 - (alpha >> 1));

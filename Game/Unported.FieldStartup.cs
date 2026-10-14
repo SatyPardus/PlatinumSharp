@@ -27,10 +27,5 @@ public static partial class Unported
     public static int ov8_0224B714(FieldSystem fieldSystem, int tileX, int tileZ, int direction) => throw Missing(0x0224B714);
     public static int ov23_02242E28() => throw Missing(0x02242E28);
     public static int ov23_02242E40() => throw Missing(0x02242E40);
-    public static void ov25_02253D7C(object poketchSystem, int eventID, int value) => throw Missing(0x02253D7C);
-    public static void ov25_02253CE8(FieldSystem fieldSystem, FieldMapContext poketchSystemOwner, SaveData saveData, object bgConfig, OamManager oamManager) => throw Missing(0x02253CE8);
-    public static void ov25_02253D5C(object? poketchSystem) => throw Missing(0x02253D5C);
-    public static int ov25_02253D70(object? poketchSystem) => throw Missing(0x02253D70);
     public static void ov5_021E6CF0(Pokemon mon, ushort species, byte isFromDaycare, TrainerInfo trainerInfo, int pokeball, int metLocation) => throw Missing(0x021E6CF0);
-    public static int ov8_0224C5DC(FieldSystem fieldSystem, MapObject mapObject) => throw Missing(0x0224C5DC);
 }

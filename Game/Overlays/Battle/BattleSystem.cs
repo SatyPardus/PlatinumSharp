@@ -440,6 +440,22 @@ public static class NetworkIcon
         }
     }
 
+    // OFFSET 0x020397E4
+    public static void NetworkIcon_InitIfConnected()
+    {
+        if (CommSystem.CommSys_IsInitialized() != 0)
+        {
+            if (CommSystem.CommSys_ConnectedCount() > 1 || CommManager.CommMan_IsWiFi() != 0)
+            {
+                NetworkIcon_Init();
+            }
+        }
+        else if (CommManager.CommMan_IsWiFi() != 0)
+        {
+            NetworkIcon_Init();
+        }
+    }
+
     // OFFSET 0x020397B0
     public static void NetworkIcon_SetStrength(int strength)
     {

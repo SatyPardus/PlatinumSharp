@@ -1043,6 +1043,15 @@ public static class Render3D
         }
     }
 
+    public static void WriteCommand(int command, params uint[] args)
+    {
+        for (int i = 0; i < args.Length; i++)
+        {
+            parameters[i] = args[i];
+        }
+        Command(command, args.Length);
+    }
+
     private static void Command(int command, int count)
     {
         uint p = parameters[0];

@@ -10,6 +10,7 @@ public static partial class ScriptCommands
     private const int MovementTypeFollowPlayer = 0x30;
     private const int CameraObjectGraphicsID = 0x2000;
     private const int LocationMapIdOffset = 0x00;
+    private const int PlayerLocalID = 0xFF;
     private const int WaitPlayer = 1;
     private const int WaitPartner = 2;
     private const int WaitTarget = 4;
@@ -35,6 +36,8 @@ public static partial class ScriptCommands
         ported[0x020411F0] = ScrCmd_ReleaseObject;
         ported[0x0204120C] = ScrCmd_AddObject;
         ported[0x02041254] = ScrCmd_RemoveObject;
+        ported[0x02041288] = ScrCmd_AddCameraOverrideObject;
+        ported[0x02041320] = ScrCmd_RemoveCameraOverrideObject;
         ported[0x02041364] = ScrCmd_AddCameraObject;
         ported[0x020413D8] = ScrCmd_RemoveCameraObject;
         ported[0x020413F0] = ScrCmd_FacePlayer;
@@ -297,6 +300,34 @@ public static partial class ScriptCommands
         {
             MapObject.MapObject_SetFlagAndDeleteObject(mapObject);
         }
+        return false;
+    }
+
+    // OFFSET 0x02041288
+    private static bool ScrCmd_AddCameraOverrideObject(ScriptContext ctx)
+    {
+        FieldSystem fieldSystem = ctx.FieldSystem;
+        ushort x = VarValue(ctx);
+        ushort z = VarValue(ctx);
+        ScriptManager scriptManager = Manager(ctx);
+        scriptManager.CameraObject = MapObjectManager.MapObjectMan_AddMapObject(fieldSystem.MapObjectManager!, x, z, 0, CameraObjectGraphicsID, 0, (int)fieldSystem.Location!.U32(LocationMapIdOffset));
+        MapObject cameraObject = scriptManager.CameraObject!;
+        MapObjectMove.MapObject_RecalculateObjectHeight(cameraObject);
+        MapObject.MapObject_SetHidden(cameraObject, 1);
+        MapObject.MapObject_SetStatus18Off(cameraObject, 0);
+        LandDataManager.LandDataManager_TrackTarget(() => MapObject.MapObject_GetPos(cameraObject), fieldSystem.LandDataManager!);
+        Camera.Camera_TrackTarget(() => MapObject.MapObject_GetPos(cameraObject), fieldSystem.Camera!);
+        return false;
+    }
+
+    // OFFSET 0x02041320
+    private static bool ScrCmd_RemoveCameraOverrideObject(ScriptContext ctx)
+    {
+        FieldSystem fieldSystem = ctx.FieldSystem;
+        MapObject.MapObject_Delete(Manager(ctx).CameraObject!);
+        MapObject player = MapObjectManager.MapObjMan_LocalMapObjByIndex(fieldSystem.MapObjectManager, PlayerLocalID)!;
+        LandDataManager.LandDataManager_TrackTarget(() => MapObject.MapObject_GetPos(player), fieldSystem.LandDataManager!);
+        Camera.Camera_TrackTarget(() => MapObject.MapObject_GetPos(player), fieldSystem.Camera!);
         return false;
     }
 

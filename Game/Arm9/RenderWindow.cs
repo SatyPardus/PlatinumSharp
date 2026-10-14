@@ -628,7 +628,7 @@ public static class RenderWindow
     {
         PokemonSpriteManager monSpriteMan = PokemonSpriteManager.PokemonSpriteManager_New(preview.Sprites.HeapID);
         PokemonSpriteTemplate template = new();
-        sub_02075EF4(template, mon, 2);
+        PokemonSpriteTemplates.Pokemon_BuildSpriteTemplate(template, (Pokemon)mon, 2);
         DrawPokemonPreviewSprite(preview, template);
         PokemonSpriteManager.PokemonSpriteManager_Free(monSpriteMan);
     }

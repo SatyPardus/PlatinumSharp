@@ -26,6 +26,36 @@ public static class OverlayApplications
                 template.Exit = FieldSystemChildProcesses.FieldBattle_Exit;
                 template.OverlayID = -1;
                 break;
+            case FieldSystemChildProcesses.TrainerCaseTemplate:
+                template.Init = TrainerCaseApplication.TrainerCaseApp_Init;
+                template.Main = TrainerCaseApplication.TrainerCaseApp_Main;
+                template.Exit = TrainerCaseApplication.TrainerCaseApp_Exit;
+                template.OverlayID = -1;
+                break;
+            case FieldSystemChildProcesses.OptionsMenuTemplate:
+                template.Init = OptionsMenu.OptionsMenu_Init;
+                template.Main = OptionsMenu.OptionsMenu_Main;
+                template.Exit = OptionsMenu.OptionsMenu_Exit;
+                template.OverlayID = -1;
+                break;
+            case FieldSystemChildProcesses.BagTemplate:
+                template.Init = BagApplication.BagApplication_Init;
+                template.Main = BagApplication.BagApplication_Main;
+                template.Exit = BagApplication.BagApplication_Exit;
+                template.OverlayID = -1;
+                break;
+            case PokemonSummaryScreenApp.PokemonSummaryScreenTemplate:
+                template.Init = PokemonSummaryScreenApp.PokemonSummaryScreen_Init;
+                template.Main = PokemonSummaryScreenApp.PokemonSummaryScreen_Main;
+                template.Exit = PokemonSummaryScreenApp.PokemonSummaryScreen_Exit;
+                template.OverlayID = -1;
+                break;
+            case PartyMenus.PartyMenuTemplate:
+                template.Init = PartyMenus.PartyMenu_Init;
+                template.Main = PartyMenus.PartyMenu_Main;
+                template.Exit = PartyMenus.PartyMenu_Exit;
+                template.OverlayID = -1;
+                break;
             case FieldMapTemplate:
                 template.Init = FieldMap.FieldMap_Init;
                 template.Main = FieldMap.FieldMap_Main;

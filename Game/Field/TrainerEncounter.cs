@@ -675,7 +675,7 @@ public static class TrainerEncounter
     {
         MovementActions.LocalMapObj_ClearFinishedAnimation(data.MapObject!);
         if (PersistedMapFeaturesInit.PersistedMapFeatures_IsCurrentDynamicMap(data.FieldSystem!, DynamicMapFeaturesHearthomeGym) == 0
-            || ov8_0224C5DC(data.FieldSystem!, data.MapObject!) == 0)
+            || HearthomeGym.HearthomeGym_ResetTrainerToPost(data.FieldSystem!, data.MapObject!) == 0)
         {
             MapObject.MapObject_SwitchMovementType(data.MapObject!, MovementTypeNone);
         }

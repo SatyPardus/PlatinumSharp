@@ -74,6 +74,11 @@ public static partial class BattleSubscreens
         return RomData.Overlay(16, address, count);
     }
 
+    public static BattleMenuConfig? BattleSubscreen_TestMenuConfig(int index)
+    {
+        return index >= 0 && index < MenuCount ? MenuConfig(index) : null;
+    }
+
     private static BattleMenuConfig MenuConfig(int index)
     {
         if (menuConfigs == null)

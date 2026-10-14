@@ -116,7 +116,7 @@ public sealed class GameString
         }
         sDigitsJP ??= RomData.Arm9U16(0x020E5744, 10);
         sDigitsEN ??= RomData.Arm9U16(0x020E5730, 10);
-        sPowersOfTen ??= RomData.Arm9U32(0x020E5754, 9);
+        sPowersOfTen ??= RomData.Arm9U32(0x020E5754, 11);
         ushort[] digits = charsetMode == 0 ? sDigitsJP : sDigitsEN;
         String_Clear(dst);
         if (negative)

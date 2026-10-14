@@ -30,4 +30,28 @@ public static class FieldSave
         fieldSystem.Location.W32(LocationWarpIdOffset, 0xFFFFFFFF);
         fieldSystem.Location.W32(LocationFaceDirectionOffset, (uint)PlayerAvatar.PlayerAvatar_GetFacingDir(fieldSystem.PlayerAvatar!));
     }
+
+    private const int MapUndergroundEntrance = 0x14C;
+    private const int MapUndergroundEntranceB = 0x14D;
+    private const int MapUnionRoom = 0x1D2;
+
+    // OFFSET 0x021E2064
+    public static void FieldSystem_SaveStateIfCommunicationOff(FieldSystem? fieldSystem)
+    {
+        if (fieldSystem == null)
+        {
+            ErrorHandling.GF_AssertFail();
+            return;
+        }
+        int mapHeaderID = (int)fieldSystem.Location!.U32(0);
+        if (mapHeaderID == MapUndergroundEntrance || mapHeaderID == MapUndergroundEntranceB || mapHeaderID == MapUnionRoom)
+        {
+            return;
+        }
+        if (CommManager.CommMan_IsInitializedNotPoketch() == 1)
+        {
+            return;
+        }
+        FieldSystem_SaveObjectsAndLocation(fieldSystem);
+    }
 }

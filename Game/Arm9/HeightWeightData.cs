@@ -12,6 +12,21 @@ public sealed class HeightWeightData
 
 public static class HeightWeight
 {
+    // OFFSET 0x0207A2A8
+    public static HeightWeightData HeightWeightData_LoadNew(int heapID)
+    {
+        HeightWeightData data = HeightWeightData_New(heapID);
+        HeightWeightData_Load(data, 0, heapID);
+        return data;
+    }
+
+    // OFFSET 0x0207A2C0
+    public static void HeightWeightData_FreeLoaded(HeightWeightData data)
+    {
+        HeightWeightData_Release(data);
+        HeightWeightData_Free(data);
+    }
+
     private const int MemberHeight = 0;
     private const int MemberWeight = 1;
     private const int MemberMaleTrainerPositions = 9;

@@ -65,4 +65,66 @@ public static class HealthBar
         }
         return HealthBar_FillColor(HealthBar_Fill(curHP, maxHP, (byte)barSize), barSize);
     }
+
+    // OFFSET 0x0208C120
+    public static void App_StartScreenFade(bool fadeOut, int heapID)
+    {
+        if (!fadeOut)
+        {
+            ScreenFadeControl.StartScreenFade(0, 1, 1, 0, 6, 1, heapID);
+        }
+        else
+        {
+            ScreenFadeControl.StartScreenFade(0, 0, 0, 0, 6, 1, heapID);
+        }
+    }
+
+    // OFFSET 0x0208C15C
+    public static int App_AdjustItemCountWithInput(ref short count, ushort max)
+    {
+        short original = count;
+        int keys = Globals.gSystem.PressedKeysRepeatable;
+        if ((keys & KeyUp) != 0)
+        {
+            count++;
+            if (count > max)
+            {
+                count = 1;
+            }
+            return count == original ? 0 : 1;
+        }
+        if ((keys & KeyDown) != 0)
+        {
+            count--;
+            if (count <= 0)
+            {
+                count = (short)max;
+            }
+            return count == original ? 0 : 2;
+        }
+        if ((keys & KeyLeft) != 0)
+        {
+            count -= 10;
+            if (count <= 0)
+            {
+                count = 1;
+            }
+            return count == original ? 0 : 2;
+        }
+        if ((keys & KeyRight) != 0)
+        {
+            count += 10;
+            if (count > max)
+            {
+                count = (short)max;
+            }
+            return count == original ? 0 : 1;
+        }
+        return 0;
+    }
+
+    private const int KeyRight = 0x10;
+    private const int KeyLeft = 0x20;
+    private const int KeyUp = 0x40;
+    private const int KeyDown = 0x80;
 }

@@ -25,8 +25,8 @@ public sealed class BallRotation
 {
     public const int StateFinished = 0xFF;
 
-    public int Unknown00;
-    public int Unknown04;
+    public int CatchMode;
+    public int CatchModeState;
     public int State;
     public int SubState;
     public int Counter;
@@ -49,7 +49,9 @@ public sealed class BallRotation
     public int PathCounter;
     public int ArcHeight;
     public SysTask? Task;
+    public BallCaptureEffect? CaptureEffect;
     public PaletteFadeContext? Fade;
+    public BattlerObjSprites? ObjSprites;
     public int Delay;
     public readonly XYTransformContext LinearContext = new();
     public readonly XYTransformContext RevolutionContext = new();
@@ -57,7 +59,7 @@ public sealed class BallRotation
 
 public static partial class BallRotations
 {
-    public const int ModeCount = 14;
+    public const int ModeCount = 6;
     public const int ModeHold = 4;
 
     private const int NarcBattleSubscreen = 0x1B;
@@ -90,17 +92,21 @@ public static partial class BallRotations
         BallRotation_ThrowMode,
         rotation => throw Missing(0x022371E4),
         rotation => throw Missing(0x02237608),
-        rotation => throw Missing(0x02236F10),
+        BallRotation_CaptureMode,
         BallRotation_HoldMode,
         rotation => throw Missing(0x02237474),
-        rotation => throw Missing(0x02236788),
-        rotation => throw Missing(0x022367B0),
-        rotation => throw Missing(0x022367D8),
-        rotation => throw Missing(0x02236800),
-        rotation => throw Missing(0x02236828),
-        rotation => throw Missing(0x02236850),
-        rotation => throw Missing(0x02236878),
-        rotation => throw Missing(0x022368A0),
+    };
+
+    private static readonly Func<BallRotation, int>[] CatchModeFuncs =
+    {
+        BallRotation_CatchModeThrow,
+        BallRotation_CatchModeOpen,
+        BallRotation_CatchModeDeflect,
+        BallRotation_CatchModeDrop,
+        BallRotation_CatchModeShake,
+        BallRotation_CatchModeBreakOut,
+        BallRotation_CatchModeLock,
+        BallRotation_CatchModeFade,
     };
 
     // OFFSET 0x02220474
@@ -262,6 +268,81 @@ public static partial class BallRotations
         return 1;
     }
 
+    private static int BallRotation_RunCatchSignals(BallRotation rotation, int startSignal, int endSignal)
+    {
+        if (rotation.CatchModeState == 0)
+        {
+            rotation.CatchModeState++;
+            BallRotation_SetSignal(rotation, startSignal);
+        }
+        if (BallRotation_IsSignal(rotation, endSignal) == 1)
+        {
+            return 0;
+        }
+        return 1;
+    }
+
+    // OFFSET 0x02236788
+    private static int BallRotation_CatchModeThrow(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 1, 2);
+    }
+
+    // OFFSET 0x022367B0
+    private static int BallRotation_CatchModeOpen(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 3, 4);
+    }
+
+    // OFFSET 0x022367D8
+    private static int BallRotation_CatchModeDeflect(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 5, 6);
+    }
+
+    // OFFSET 0x02236800
+    private static int BallRotation_CatchModeDrop(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 7, 0xE);
+    }
+
+    // OFFSET 0x02236828
+    private static int BallRotation_CatchModeShake(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 0xF, 0x12);
+    }
+
+    // OFFSET 0x02236850
+    private static int BallRotation_CatchModeBreakOut(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 0x13, 0x1B);
+    }
+
+    // OFFSET 0x02236878
+    private static int BallRotation_CatchModeLock(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 0x15, 0x16);
+    }
+
+    // OFFSET 0x022368A0
+    private static int BallRotation_CatchModeFade(BallRotation rotation)
+    {
+        return BallRotation_RunCatchSignals(rotation, 0x17, 0x1B);
+    }
+
+    // OFFSET 0x022368C8
+    public static void BallRotation_SetCatchMode(BallRotation rotation, int mode)
+    {
+        rotation.CatchMode = mode;
+        rotation.CatchModeState = 0;
+    }
+
+    // OFFSET 0x022368D0
+    public static int BallRotation_UpdateCatchMode(BallRotation rotation)
+    {
+        return CatchModeFuncs[rotation.CatchMode](rotation);
+    }
+
     // OFFSET 0x02235F2C
     public static int BallRotation_TypeAnimates(int type)
     {
@@ -334,8 +415,8 @@ public static partial class BallRotations
         rotation.SubState = 0;
         rotation.Signal = 0;
         rotation.Unknown18 = 0;
-        rotation.Unknown00 = 0;
-        rotation.Unknown04 = 0;
+        rotation.CatchMode = 0;
+        rotation.CatchModeState = 0;
         rotation.SpriteMan = SpriteSystem.SpriteManager_New(rotation.Template.SpriteSys);
         rotation.Delay = 0;
         rotation.TickAnimation = BallRotation_TypeAnimates(rotation.Template.Type);

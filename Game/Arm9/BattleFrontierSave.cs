@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 namespace PlatinumSharp.Game;
 
 public sealed class WifiBattleTowerRecord : BufferView
@@ -95,6 +97,36 @@ public sealed class BattleFrontierSave : ISaveBlock
         BattleHallStreakFlags.BattleHallStreakFlags_Init(new BattleHallStreakFlags(frontier.Raw, HallFlagsOffset));
         BattleCastlePersistentSave.BattleCastlePersistentSave_Init(new BattleCastlePersistentSave(frontier.Raw, CastleFlagsOffset));
         BattleArcadeStreakFlags.BattleArcadeStreakFlags_Init(new BattleArcadeStreakFlags(frontier.Raw, ArcadeFlagsOffset));
+    }
+
+    private const int StatsFlagsStart = 0x64;
+    private const int StatsFriendStart = 0x70;
+    private const int FriendStatsOffset = 0xE0;
+    private const int FriendStatsSize = 0x40;
+
+    // OFFSET 0x02030698
+    public static ushort BattleFrontierSave_GetStat(BattleFrontierSave frontier, int statIndex, int hostFriendID)
+    {
+        if (statIndex < StatsFriendStart)
+        {
+            if (statIndex >= StatsFlagsStart)
+            {
+                if (hostFriendID >= 0x10)
+                {
+                    statIndex++;
+                    hostFriendID -= 0x10;
+                }
+                ushort flags = BinaryPrimitives.ReadUInt16LittleEndian(frontier.Raw.AsSpan(statIndex * 2));
+                return (ushort)((flags >> hostFriendID) & 1);
+            }
+            return BinaryPrimitives.ReadUInt16LittleEndian(frontier.Raw.AsSpan(statIndex * 2));
+        }
+        if (hostFriendID == -1)
+        {
+            ErrorHandling.GF_AssertFail();
+            return 0;
+        }
+        return BinaryPrimitives.ReadUInt16LittleEndian(frontier.Raw.AsSpan(hostFriendID * FriendStatsSize + (statIndex - StatsFriendStart) * 2 + FriendStatsOffset));
     }
 
     // OFFSET 0x0203068C

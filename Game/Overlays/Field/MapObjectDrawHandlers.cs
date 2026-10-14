@@ -11,6 +11,8 @@ public sealed class MapObjectSpriteDrawData
     public sbyte LastDir;
     public sbyte LastDrawState;
     public byte Flags;
+    public sbyte AnimTimer;
+    public sbyte AnimDelay;
     public readonly MapObjectBillboardSlot Slot = new();
     public readonly MapObjectBillboardState SavedState = new();
 }
@@ -20,6 +22,11 @@ public static partial class MapObjectDrawHandlers
     private const int OverlayID = 5;
     private const int DrawDataSize = 0x10;
     private const int NpcDrawStateCount = 9;
+    private const int NurseDrawStateCount = 10;
+    private const int NurseDrawStateBow = 9;
+    private const int NurseBowAnim = 4;
+    private const int MagikarpMaxDelay = 16;
+    private const int MagikarpAnimFrames = 32;
     private const int PlayerDrawStateCount = 10;
     private const int DrawStateRunning = 9;
     private const int IdleFrameCycle = 8;
@@ -52,6 +59,20 @@ public static partial class MapObjectDrawHandlers
         Npc_DrawStateSteps6,
         Npc_DrawStateSteps7,
         Npc_DrawStateSteps8,
+    };
+
+    private static readonly MapObjectSpriteStateFunc[] sNurseDrawStates =
+    {
+        Nurse_DrawStateIdle,
+        Npc_DrawStateWalkHalf,
+        Npc_DrawStateWalkHalf,
+        Npc_DrawStateWalk1,
+        Npc_DrawStateWalk2,
+        Npc_DrawStateWalk4,
+        Npc_DrawStateSteps6,
+        Npc_DrawStateSteps7,
+        Npc_DrawStateSteps8,
+        Nurse_DrawStateBow,
     };
 
     private static readonly MapObjectSpriteStateFunc[] sPlayerDrawStates =
@@ -118,6 +139,27 @@ public static partial class MapObjectDrawHandlers
                 return true;
             case 0x021EB438:
                 Npc_DrawLoopAnim(mapObject);
+                return true;
+            case 0x021EB720:
+                Nurse_Draw(mapObject);
+                return true;
+            case 0x021EB7F8:
+                Magikarp_DrawInit(mapObject);
+                return true;
+            case 0x021EB834:
+                Magikarp_DrawDelete(mapObject);
+                return true;
+            case 0x021EB848:
+                Magikarp_DrawSuspend(mapObject);
+                return true;
+            case 0x021EB874:
+                Magikarp_DrawResume(mapObject);
+                return true;
+            case 0x021EB8B8:
+                Magikarp_Draw(mapObject);
+                return true;
+            case 0x021EB944:
+                Starly_Draw(mapObject);
                 return true;
             case 0x021EBA0C:
                 Player_DrawInit(mapObject);
@@ -320,6 +362,186 @@ public static partial class MapObjectDrawHandlers
         {
             Billboards.Billboard_AdvanceAnim(billboard, Fx32.One);
         }
+        MapObjectRenderResources.MapObject_UpdateBillboardPos(mapObject, billboard);
+        MapObject_UpdateBillboardDrawFlag(mapObject, billboard);
+    }
+
+    // OFFSET 0x021EB720
+    public static void Nurse_Draw(MapObject mapObject)
+    {
+        Billboard? billboard = GetSpriteDrawData(mapObject).Slot.Billboard;
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        if (MapObjectRenderResources.MapObject_IsBillboardPending(mapObject) == 1)
+        {
+            return;
+        }
+        if (billboard == null)
+        {
+            return;
+        }
+        int dir = MapObject.MapObject_GetFacingDir(mapObject);
+        int drawState = MapObject.MapObject_GetDrawState(mapObject);
+        if (drawState >= NurseDrawStateCount)
+        {
+            ErrorHandling.GF_AssertFail();
+        }
+        sNurseDrawStates[drawState](mapObject, billboard, drawData, dir);
+        drawData.LastDir = (sbyte)dir;
+        drawData.LastDrawState = (sbyte)MapObject.MapObject_GetDrawState(mapObject);
+        MapObjectRenderResources.MapObject_UpdateBillboardPos(mapObject, billboard);
+        MapObject_UpdateBillboardDrawFlag(mapObject, billboard);
+    }
+
+    // OFFSET 0x021EB794
+    private static void Nurse_DrawStateIdle(MapObject mapObject, Billboard billboard, MapObjectSpriteDrawData drawData, int dir)
+    {
+        if (dir != drawData.LastDir || drawData.LastDrawState == NurseDrawStateBow)
+        {
+            Billboards.Billboard_SetAnimNum(billboard, MapObjectRenderResources.GetWalkAnimForDir(dir));
+            Billboards.Billboard_SetAnimFrameNum(billboard, 0);
+        }
+        else
+        {
+            Billboard_SnapToIdleFrame(billboard);
+        }
+        Billboards.Billboard_AdvanceAnim(billboard, 0);
+    }
+
+    // OFFSET 0x021EB7D0
+    private static void Nurse_DrawStateBow(MapObject mapObject, Billboard billboard, MapObjectSpriteDrawData drawData, int dir)
+    {
+        if (drawData.LastDrawState != NurseDrawStateBow)
+        {
+            Billboards.Billboard_SetAnimNum(billboard, NurseBowAnim);
+            Billboards.Billboard_SetAnimFrameNum(billboard, 0);
+        }
+        Billboards.Billboard_AdvanceAnim(billboard, Fx32.One);
+    }
+
+    // OFFSET 0x021EB7F8
+    public static void Magikarp_DrawInit(MapObject mapObject)
+    {
+        MapObjectSpriteDrawData drawData = InitSpriteDrawData(mapObject);
+        drawData.LastDir = -1;
+        drawData.AnimDelay = (sbyte)(MathUtil.LCRNG_Next() % MagikarpMaxDelay);
+        MapObjectRenderResources.MapObject_AddBillboard(mapObject, drawData.Slot);
+        if (drawData.Slot.Billboard != null)
+        {
+            MapObject.MapObject_CallDraw(mapObject);
+        }
+    }
+
+    // OFFSET 0x021EB834
+    public static void Magikarp_DrawDelete(MapObject mapObject)
+    {
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        MapObjectRenderResources.MapObject_DeleteBillboard(mapObject, drawData.Slot);
+    }
+
+    // OFFSET 0x021EB848
+    public static void Magikarp_DrawSuspend(MapObject mapObject)
+    {
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        if (drawData.Slot.Billboard != null)
+        {
+            MapObjectRenderResources.Billboard_SaveState(drawData.Slot.Billboard, drawData.SavedState);
+        }
+        MapObjectRenderResources.MapObject_DeleteBillboard(mapObject, drawData.Slot);
+        MapObject.MapObject_SetStatusFlagOn(mapObject, StatusDrawSuspended);
+    }
+
+    // OFFSET 0x021EB874
+    public static void Magikarp_DrawResume(MapObject mapObject)
+    {
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        if (MapObjectRenderResources.MapObject_IsBillboardPending(mapObject) == 1)
+        {
+            return;
+        }
+        if (drawData.Slot.Billboard == null)
+        {
+            MapObjectRenderResources.MapObject_AddBillboard(mapObject, drawData.Slot);
+        }
+        if (drawData.Slot.Billboard != null)
+        {
+            MapObjectRenderResources.Billboard_RestoreState(drawData.Slot.Billboard, drawData.SavedState);
+            MapObjectRenderResources.MapObject_UpdateBillboardPos(mapObject, drawData.Slot.Billboard);
+            MapObject.MapObject_SetStatusFlagOff(mapObject, StatusDrawSuspended);
+        }
+    }
+
+    // OFFSET 0x021EB8B8
+    public static void Magikarp_Draw(MapObject mapObject)
+    {
+        Billboard? billboard = GetSpriteDrawData(mapObject).Slot.Billboard;
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        if (MapObjectRenderResources.MapObject_IsBillboardPending(mapObject) == 1)
+        {
+            return;
+        }
+        if (billboard == null)
+        {
+            return;
+        }
+        int dir = MapObject.MapObject_GetFacingDir(mapObject);
+        MapObject.MapObject_GetDrawState(mapObject);
+        if (drawData.AnimDelay != 0)
+        {
+            drawData.AnimDelay--;
+            Billboards.Billboard_AdvanceAnim(billboard, 0);
+        }
+        else
+        {
+            Billboards.Billboard_AdvanceAnim(billboard, Fx32.One);
+            drawData.AnimTimer++;
+            if (drawData.AnimTimer >= MagikarpAnimFrames)
+            {
+                drawData.AnimTimer = 0;
+                drawData.AnimDelay = (sbyte)(MathUtil.LCRNG_Next() % MagikarpMaxDelay);
+            }
+        }
+        drawData.LastDir = (sbyte)dir;
+        drawData.LastDrawState = (sbyte)MapObject.MapObject_GetDrawState(mapObject);
+        MapObjectRenderResources.MapObject_UpdateBillboardPos(mapObject, billboard);
+        MapObject_UpdateBillboardDrawFlag(mapObject, billboard);
+    }
+
+    // OFFSET 0x021EB944
+    public static void Starly_Draw(MapObject mapObject)
+    {
+        Billboard? billboard = GetSpriteDrawData(mapObject).Slot.Billboard;
+        MapObjectSpriteDrawData drawData = GetSpriteDrawData(mapObject);
+        if (MapObjectRenderResources.MapObject_IsBillboardPending(mapObject) == 1)
+        {
+            return;
+        }
+        if (billboard == null)
+        {
+            return;
+        }
+        int dir = MapObject.MapObject_GetFacingDir(mapObject);
+        int anim = dir > 1 ? 1 : 0;
+        if (MapObject.MapObject_GetDrawState(mapObject) == 0)
+        {
+            if (anim != Billboards.Billboard_GetAnimNum(billboard) || drawData.LastDrawState != 0)
+            {
+                Billboards.Billboard_SetAnimNum(billboard, anim);
+                Billboards.Billboard_SetAnimFrameNum(billboard, 0);
+                Billboards.Billboard_AdvanceAnim(billboard, 0);
+            }
+            Billboards.Billboard_AdvanceAnim(billboard, 0);
+        }
+        else
+        {
+            if (anim != Billboards.Billboard_GetAnimNum(billboard))
+            {
+                Billboards.Billboard_SetAnimNum(billboard, anim);
+                Billboards.Billboard_SetAnimFrameNum(billboard, 0);
+            }
+            Billboards.Billboard_AdvanceAnim(billboard, Fx32.One);
+        }
+        drawData.LastDir = (sbyte)dir;
+        drawData.LastDrawState = (sbyte)MapObject.MapObject_GetDrawState(mapObject);
         MapObjectRenderResources.MapObject_UpdateBillboardPos(mapObject, billboard);
         MapObject_UpdateBillboardDrawFlag(mapObject, billboard);
     }

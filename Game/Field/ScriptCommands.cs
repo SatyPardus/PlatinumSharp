@@ -54,11 +54,16 @@ public static partial class ScriptCommands
                 RegisterObjects(ported);
                 RegisterSound(ported);
                 RegisterStrings(ported);
+                RegisterStrings2(ported);
                 RegisterDoors(ported);
                 RegisterExtra(ported);
                 RegisterStory(ported);
                 RegisterPlayer(ported);
                 RegisterSave(ported);
+                RegisterTrainers(ported);
+                RegisterParty(ported);
+                RegisterMenus(ported);
+                RegisterTV(ported);
                 sPorted = ported;
             }
             return sPorted;

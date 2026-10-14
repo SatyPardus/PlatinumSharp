@@ -17,6 +17,8 @@ public static class TestWorld
 
     public static readonly HashSet<(int FromX, int FromZ, int ToX, int ToZ)> BlockedEdges = new();
 
+    public static readonly HashSet<(int X, int Z)> KnownTriggerTiles = new();
+
     public static IEnumerable<MapObject> Objects(FieldSystem field)
     {
         MapObject[]? objects = field.MapObjectManager?.MapObjects;
@@ -56,21 +58,102 @@ public static class TestWorld
         return best;
     }
 
-    public static bool TerrainBlocked(FieldSystem field, int x, int z)
+    private const int NarcLandData = 0x43;
+    private const uint LandDataAttributesOffset = 0x10;
+    private const int LandDataAttributeCount = 0x400;
+    private const int MapBlockSize = 32;
+    private const int CollisionBit = 15;
+    private const int InvalidBehavior = 0xFF;
+    private const int NoLandData = 0xFFFF;
+    private static readonly Dictionary<int, ushort[]> landAttributes = new();
+    private static NARC? landDataNarc;
+
+    private static ushort[]? LandAttributes(int landDataID)
     {
+        if (landAttributes.TryGetValue(landDataID, out ushort[]? cached))
+        {
+            return cached;
+        }
         try
         {
-            return TerrainCollisionManager.TerrainCollisionManager_CheckCollision(field, x, z) != 0;
+            landDataNarc ??= NARC.NARC_ctor(NarcLandData, 0);
+            byte[] buffer = new byte[LandDataAttributeCount * 2];
+            NARC.NARC_ReadFromMember(landDataNarc, (uint)landDataID, LandDataAttributesOffset, (uint)buffer.Length, buffer);
+            ushort[] attributes = new ushort[LandDataAttributeCount];
+            for (int i = 0; i < LandDataAttributeCount; i++)
+            {
+                attributes[i] = (ushort)(buffer[i * 2] | (buffer[i * 2 + 1] << 8));
+            }
+            landAttributes[landDataID] = attributes;
+            return attributes;
         }
         catch (Exception)
         {
+            landAttributes[landDataID] = null!;
+            return null;
+        }
+    }
+
+    public static bool TileAttributes(FieldSystem field, int x, int z, out ushort attributes)
+    {
+        attributes = 0;
+        MapMatrix? matrix = field.MapMatrix;
+        if (matrix == null || x < 0 || z < 0)
+        {
+            return false;
+        }
+        int width = MapMatrix.MapMatrix_GetWidth(matrix);
+        int height = MapMatrix.MapMatrix_GetHeight(matrix);
+        if (x / MapBlockSize >= width || z / MapBlockSize >= height)
+        {
+            return false;
+        }
+        int landDataID = MapMatrix.MapMatrix_GetLandDataIDByIndex2(x / MapBlockSize + z / MapBlockSize * width, matrix);
+        if (landDataID == NoLandData)
+        {
+            return false;
+        }
+        ushort[]? block = LandAttributes(landDataID);
+        if (block == null)
+        {
+            return false;
+        }
+        attributes = block[x % MapBlockSize + z % MapBlockSize * MapBlockSize];
+        return true;
+    }
+
+    public static int TileBehaviorAt(FieldSystem field, int x, int z)
+    {
+        return TileAttributes(field, x, z, out ushort attributes) ? attributes & 0xFF : InvalidBehavior;
+    }
+
+    public static bool TerrainBlocked(FieldSystem field, int x, int z)
+    {
+        if (!TileAttributes(field, x, z, out ushort attributes))
+        {
             return true;
         }
+        return ((attributes >> CollisionBit) & 1) != 0;
+    }
+
+    private static bool IsWater(FieldSystem field, int x, int z)
+    {
+        int behavior = TileBehaviorAt(field, x, z);
+        return TileBehavior.TileBehavior_IsSurfable(behavior) != 0 || TileBehavior.TileBehavior_IsWaterfall(behavior) != 0;
+    }
+
+    public static bool WaterBlocked(FieldSystem field, int x, int z)
+    {
+        if (field.PlayerAvatar?.MapObject == null || !IsWater(field, x, z))
+        {
+            return false;
+        }
+        return !IsWater(field, PlayerAvatar.PlayerAvatar_GetXPos(field.PlayerAvatar), PlayerAvatar.PlayerAvatar_GetZPos(field.PlayerAvatar));
     }
 
     public static bool Walkable(FieldSystem field, int x, int z)
     {
-        if (x < 0 || z < 0 || TerrainBlocked(field, x, z))
+        if (x < 0 || z < 0 || TerrainBlocked(field, x, z) || WaterBlocked(field, x, z))
         {
             return false;
         }
@@ -88,7 +171,66 @@ public static class TestWorld
     public static List<(int X, int Z)>? FindPath(FieldSystem field, int startX, int startZ, Func<int, int, bool> isGoal)
     {
         HashSet<(int, int)> triggers = ActiveTriggerTiles(field);
-        return FindPath(field, startX, startZ, isGoal, triggers) ?? FindPath(field, startX, startZ, isGoal, null);
+        List<(int X, int Z)>? direct = FindPath(field, startX, startZ, isGoal, null);
+        List<(int X, int Z)>? avoiding = FindPath(field, startX, startZ, isGoal, triggers);
+        if (avoiding == null || (direct != null && avoiding.Count > direct.Count * 2 + 8))
+        {
+            return direct;
+        }
+        return avoiding;
+    }
+
+    public static Dictionary<(int X, int Z), int> Distances(FieldSystem field, int startX, int startZ)
+    {
+        Dictionary<(int X, int Z), int> distance = new() { [(startX, startZ)] = 0 };
+        Dictionary<(int, int), int> heights = new();
+        Queue<(int X, int Z)> open = new();
+        open.Enqueue((startX, startZ));
+        heights[(startX, startZ)] = field.PlayerAvatar != null && field.PlayerAvatar.MapObject != null ? PlayerAvatar.PlayerAvatar_GetPos(field.PlayerAvatar).Y : 0;
+        while (open.Count > 0)
+        {
+            (int X, int Z) current = open.Dequeue();
+            foreach ((int X, int Z) step in neighbours)
+            {
+                if (TryJump(field, current, step, heights[current], out (int X, int Z) landing, out int landingHeight) && !distance.ContainsKey(landing) && !KnownTriggerTiles.Contains(landing))
+                {
+                    heights[landing] = landingHeight;
+                    distance[landing] = distance[current] + 1;
+                    open.Enqueue(landing);
+                    continue;
+                }
+                (int X, int Z) next = (current.X + step.X, current.Z + step.Z);
+                if (distance.ContainsKey(next) || Math.Abs(next.X - startX) > SearchRadius || Math.Abs(next.Z - startZ) > SearchRadius)
+                {
+                    continue;
+                }
+                if (BlockedEdges.Contains((current.X, current.Z, next.X, next.Z)) || !Walkable(field, next.X, next.Z) || KnownTriggerTiles.Contains(next))
+                {
+                    continue;
+                }
+                if (!CanStep(field, current.X, current.Z, heights[current], next.X, next.Z, out int nextHeight))
+                {
+                    continue;
+                }
+                heights[next] = nextHeight;
+                distance[next] = distance[current] + 1;
+                open.Enqueue(next);
+            }
+        }
+        return distance;
+    }
+
+    public static int NearestAdjacent(Dictionary<(int X, int Z), int> distance, int x, int z)
+    {
+        int best = int.MaxValue;
+        foreach ((int X, int Z) step in neighbours)
+        {
+            if (distance.TryGetValue((x + step.X, z + step.Z), out int d) && d < best)
+            {
+                best = d;
+            }
+        }
+        return best;
     }
 
     private static HashSet<(int, int)> ActiveTriggerTiles(FieldSystem field)
@@ -140,12 +282,28 @@ public static class TestWorld
             }
             foreach ((int X, int Z) step in neighbours)
             {
+                if (TryJump(field, current, step, heights[current], out (int X, int Z) landing, out int landingHeight))
+                {
+                    bool landingAllowed = !cameFrom.ContainsKey(landing) && !BlockedEdges.Contains((current.X, current.Z, landing.X, landing.Z))
+                        && (!KnownTriggerTiles.Contains(landing) || isGoal(landing.X, landing.Z)) && (avoid == null || !avoid.Contains(landing) || isGoal(landing.X, landing.Z));
+                    if (landingAllowed)
+                    {
+                        heights[landing] = landingHeight;
+                        cameFrom[landing] = current;
+                        open.Enqueue(landing);
+                    }
+                    continue;
+                }
                 (int X, int Z) next = (current.X + step.X, current.Z + step.Z);
                 if (cameFrom.ContainsKey(next) || Math.Abs(next.X - startX) > SearchRadius || Math.Abs(next.Z - startZ) > SearchRadius)
                 {
                     continue;
                 }
                 if (BlockedEdges.Contains((current.X, current.Z, next.X, next.Z)) || !Walkable(field, next.X, next.Z))
+                {
+                    continue;
+                }
+                if (KnownTriggerTiles.Contains(next) && !isGoal(next.X, next.Z))
                 {
                     continue;
                 }
@@ -163,6 +321,56 @@ public static class TestWorld
             }
         }
         return null;
+    }
+
+    private static bool TryJump(FieldSystem field, (int X, int Z) from, (int X, int Z) step, int fromHeight, out (int X, int Z) landing, out int landingHeight)
+    {
+        landing = from;
+        landingHeight = fromHeight;
+        int behavior;
+        try
+        {
+            behavior = TileBehaviorAt(field, from.X + step.X, from.Z + step.Z);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        int distance;
+        if (step == (0, -1))
+        {
+            distance = TileBehavior.TileBehavior_IsJumpNorth(behavior) != 0 ? 2 : TileBehavior.TileBehavior_IsJumpNorthTwice(behavior) != 0 ? 3 : 0;
+        }
+        else if (step == (0, 1))
+        {
+            distance = TileBehavior.TileBehavior_IsJumpSouth(behavior) != 0 ? 2 : TileBehavior.TileBehavior_IsJumpSouthTwice(behavior) != 0 ? 3 : 0;
+        }
+        else if (step == (-1, 0))
+        {
+            distance = TileBehavior.TileBehavior_IsJumpWest(behavior) != 0 ? 2 : TileBehavior.TileBehavior_IsJumpWestTwice(behavior) != 0 ? 3 : 0;
+        }
+        else
+        {
+            distance = TileBehavior.TileBehavior_IsJumpEast(behavior) != 0 ? 2 : TileBehavior.TileBehavior_IsJumpEastTwice(behavior) != 0 ? 3 : 0;
+        }
+        if (distance == 0)
+        {
+            return false;
+        }
+        landing = (from.X + step.X * distance, from.Z + step.Z * distance);
+        if (!Walkable(field, landing.X, landing.Z))
+        {
+            return false;
+        }
+        try
+        {
+            landingHeight = TerrainCollisionManager.TerrainCollisionManager_GetHeight(field, fromHeight, (landing.X << 16) + HalfTile, (landing.Z << 16) + HalfTile, out _);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        return true;
     }
 
     private static bool CanStep(FieldSystem field, int fromX, int fromZ, int fromHeight, int toX, int toZ, out int toHeight)
@@ -192,7 +400,7 @@ public static class TestWorld
         byte behavior;
         try
         {
-            behavior = TerrainCollisionManager.TerrainCollisionManager_GetTileBehavior(field, warpX, warpZ);
+            behavior = (byte)TileBehaviorAt(field, warpX, warpZ);
         }
         catch (Exception)
         {

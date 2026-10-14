@@ -118,6 +118,10 @@ public static class EncounterEffects
     {
         switch (address)
         {
+            case 0x021E2338:
+                return EncounterEffect_Grass_HigherLevel;
+            case 0x021E24A8:
+                return EncounterEffect_Grass_LowerLevel;
             case 0x021E2B54:
                 return EncounterEffect_TrainerGrassLowerLevel;
             case 0x021E2EB0:
@@ -669,6 +673,95 @@ public static class EncounterEffects
         public readonly Sprite?[] Sprites = new Sprite?[2];
         public Camera? Camera;
         public readonly QuadraticInterpolationTask CameraDistance = new();
+    }
+
+    private sealed class GrassEffectData
+    {
+        public Camera? Camera;
+        public readonly QuadraticInterpolationTask CameraDistance = new();
+        public EncounterEffectScreenSlice? Slice;
+    }
+
+    private static void EncounterEffect_Grass(SysTask task, EncounterEffect effect, int flashBrightness, int pixelsPerSlice, int firstEnd, int zoomOutDistance, int zoomOutSpeed)
+    {
+        GrassEffectData data = (GrassEffectData)effect.Param!;
+        switch (effect.State)
+        {
+            case 0:
+                data = new GrassEffectData();
+                effect.Param = data;
+                data.Slice = ScreenSlice_New();
+                effect.State++;
+                break;
+            case 1:
+                EncounterEffect_Flash(ScreenMain, flashBrightness, -16, effect.FlashDone, 2);
+                effect.State++;
+                break;
+            case 2:
+            {
+                if (effect.FlashDone[0] == 0)
+                {
+                    break;
+                }
+                effect.FlashDone[0] = 0;
+                effect.State++;
+                ScreenSlice_Start(effect, data.Slice!, pixelsPerSlice, 7, 0, firstEnd, -0xC000);
+                data.Camera = effect.FieldSystem.Camera;
+                int distance = Camera.Camera_GetDistance(data.Camera!);
+                QuadraticInterpolationTaskFX32_Init(data.CameraDistance, distance, distance + 0x32000, 0x1E000, 6);
+                break;
+            }
+            case 3:
+            {
+                int done = QuadraticInterpolationTaskFX32_Update(data.CameraDistance);
+                Camera.Camera_SetDistance(data.CameraDistance.X, data.Camera!);
+                if (done != 1)
+                {
+                    break;
+                }
+                effect.State++;
+                ScreenSlice_Restart(effect, data.Slice!, pixelsPerSlice, 6, firstEnd, 0xFF000, 0x1E000);
+                data.Camera = effect.FieldSystem.Camera;
+                int distance = Camera.Camera_GetDistance(data.Camera!);
+                QuadraticInterpolationTaskFX32_Init(data.CameraDistance, distance, distance - zoomOutDistance, zoomOutSpeed, 6);
+                break;
+            }
+            case 4:
+            {
+                int done = QuadraticInterpolationTaskFX32_Update(data.CameraDistance);
+                Camera.Camera_SetDistance(data.CameraDistance.X, data.Camera!);
+                if (done == 1 && EncounterEffect_GetEffectDone(effect) == 1)
+                {
+                    effect.State++;
+                }
+                break;
+            }
+            case 5:
+                ScreenFadeControl.SetColorBrightness(0);
+                for (int layer = 0; layer < BgLayers; layer++)
+                {
+                    Video.SetBgOffset(layer, 0);
+                }
+                if (effect.Done != null)
+                {
+                    effect.Done[0] = 1;
+                }
+                ScreenSlice_Delete(data.Slice!);
+                EncounterEffect_Finish(effect, task);
+                break;
+        }
+    }
+
+    // OFFSET 0x021E2338
+    private static void EncounterEffect_Grass_HigherLevel(SysTask task, object? param)
+    {
+        EncounterEffect_Grass(task, (EncounterEffect)param!, 16, 2, -0x3000, 0x32000, -0xFF000);
+    }
+
+    // OFFSET 0x021E24A8
+    private static void EncounterEffect_Grass_LowerLevel(SysTask task, object? param)
+    {
+        EncounterEffect_Grass(task, (EncounterEffect)param!, -16, 5, -0x2000, 0x1E000, -0x64000);
     }
 
     // OFFSET 0x021E2B54

@@ -28,6 +28,52 @@ public static class PokemonSpriteTemplates
         template.Word1 = (template.Word1 & 0xFFFF0000) | (uint)(palette & 0xFFFF);
     }
 
+    private const int ParamPersonality = 0;
+    private const int ParamSpecies = 5;
+    private const int ParamForm = 0x70;
+    private const int ParamSpeciesOrEgg = 0xAE;
+    private const int SpeciesManaphy = 490;
+
+    // OFFSET 0x02075EF4
+    public static void Pokemon_BuildSpriteTemplate(PokemonSpriteTemplate template, Pokemon mon, int face)
+    {
+        BoxPokemon_BuildSpriteTemplate(template, Pokemon.Pokemon_GetBoxPokemon(mon), face, 0);
+    }
+
+    // OFFSET 0x02075F00
+    public static void Pokemon_BuildSpriteTemplateDP(PokemonSpriteTemplate template, Pokemon mon, int face)
+    {
+        BoxPokemon_BuildSpriteTemplate(template, Pokemon.Pokemon_GetBoxPokemon(mon), face, 1);
+    }
+
+    // OFFSET 0x02075F0C
+    public static void BoxPokemon_BuildSpriteTemplate(PokemonSpriteTemplate template, BoxPokemon boxMon, int face, int preferDP)
+    {
+        int decryptionContext = Pokemon.BoxPokemon_EnterDecryptionContext(boxMon);
+        ushort species = (ushort)Pokemon.BoxPokemon_GetValue(boxMon, ParamSpeciesOrEgg, null);
+        byte gender = Pokemon.BoxPokemon_GetGender(boxMon);
+        byte shiny = Pokemon.BoxPokemon_IsShiny(boxMon);
+        uint personality = Pokemon.BoxPokemon_GetValue(boxMon, ParamPersonality, null);
+        byte form;
+        if (species == SpeciesEgg)
+        {
+            form = (byte)(Pokemon.BoxPokemon_GetValue(boxMon, ParamSpecies, null) == SpeciesManaphy ? 1 : 0);
+        }
+        else
+        {
+            form = (byte)Pokemon.BoxPokemon_GetValue(boxMon, ParamForm, null);
+        }
+        if (preferDP == 1)
+        {
+            Unported.sub_02076300(template, species, gender, face, shiny, form, personality);
+        }
+        else
+        {
+            BuildPokemonSpriteTemplate(template, species, gender, face, shiny, form, personality);
+        }
+        Pokemon.BoxPokemon_ExitDecryptionContext(boxMon, decryptionContext);
+    }
+
     // OFFSET 0x02075FB4
     public static void BuildPokemonSpriteTemplate(PokemonSpriteTemplate template, ushort species, byte gender, int face, int shiny, int form, uint personality)
     {

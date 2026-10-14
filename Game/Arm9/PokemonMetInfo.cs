@@ -33,6 +33,12 @@ public static class PokemonMetInfo
     private const int ParamOTGender = 157;
     private const int ParamLevel = 161;
 
+    // OFFSET 0x0209304C
+    public static void Pokemon_UpdateMetInfo(Pokemon mon, TrainerInfo trainerInfo, int method, int location, int heapID)
+    {
+        BoxPokemon_UpdateMetInfo(Pokemon.Pokemon_GetBoxPokemon(mon), trainerInfo, method, location, heapID);
+    }
+
     // OFFSET 0x0209305C
     public static void BoxPokemon_UpdateMetInfo(BoxPokemon boxMon, TrainerInfo trainerInfo, int method, int location, int heapID)
     {

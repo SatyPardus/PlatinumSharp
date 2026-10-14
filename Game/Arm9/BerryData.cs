@@ -6,6 +6,9 @@ public static class BerryData
 {
     private const int BerryArchive = 0x44;
     private const int AttributeCount = 11;
+    private const int NarcMessageBanks = 0x1A;
+    private const int MessageBankBerryNames = 0x1A8;
+    private const int MessageBankBerryDescriptions = 0x1A7;
 
     // OFFSET 0x0209739C
     public static object BerryData_OpenArchive(int heapID)
@@ -44,5 +47,23 @@ public static class BerryData
             return Bin.U16(data, 0);
         }
         return data[attribute + 1];
+    }
+
+    // OFFSET 0x0209742C
+    public static GameString? BerryData_AllocAndGetName(ushort berryIndex, int heapID)
+    {
+        MessageLoader? loader = MessageLoader.MessageLoader_Init(1, NarcMessageBanks, MessageBankBerryNames, heapID);
+        GameString? name = MessageLoader.MessageLoader_GetNewString(loader!, berryIndex);
+        MessageLoader.MessageLoader_Free(loader);
+        return name;
+    }
+
+    // OFFSET 0x02097454
+    public static GameString? BerryData_AllocAndGetDescription(ushort berryIndex, int heapID)
+    {
+        MessageLoader? loader = MessageLoader.MessageLoader_Init(1, NarcMessageBanks, MessageBankBerryDescriptions, heapID);
+        GameString? description = MessageLoader.MessageLoader_GetNewString(loader!, berryIndex);
+        MessageLoader.MessageLoader_Free(loader);
+        return description;
     }
 }

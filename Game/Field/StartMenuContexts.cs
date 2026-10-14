@@ -24,6 +24,12 @@ public sealed class ItemUseContext
     private const int DirectionWest = 2;
     private const int DirectionEast = 3;
 
+    // OFFSET 0x02068B50
+    public static bool ItemUseContext_CanPlantBerry(ItemUseContext context)
+    {
+        return (context.BerryPatchFlags & 1) != 0;
+    }
+
     // OFFSET 0x0206842C
     public static void ItemUseContext_Init(FieldSystem fieldSystem, ItemUseContext context)
     {
@@ -85,11 +91,11 @@ public sealed class ItemMenuUseContext
 public sealed class FieldMoveContext
 {
     public const int Size = 0x10;
-    public const ushort FlagRockSmash = 0x001;
+    public const ushort FlagCut = 0x001;
     public const ushort FlagSurf = 0x004;
     public const ushort FlagStrength = 0x008;
     public const ushort FlagDefog = 0x010;
-    public const ushort FlagCut = 0x020;
+    public const ushort FlagRockSmash = 0x020;
     public const ushort FlagWaterfall = 0x040;
     public const ushort FlagRockClimb = 0x080;
     public const ushort FlagFlash = 0x100;
@@ -100,8 +106,8 @@ public sealed class FieldMoveContext
     public ushort Flags;
 
     private const int GraphicsIDStrengthBoulder = 0x54;
-    private const int GraphicsIDCutTree = 0x55;
-    private const int GraphicsIDRockSmash = 0x56;
+    private const int GraphicsIDRockSmash = 0x55;
+    private const int GraphicsIDCutTree = 0x56;
     private const int WeatherFog = 0x0E;
     private const int WeatherDark = 0x10;
 
@@ -125,11 +131,11 @@ public sealed class FieldMoveContext
                 case GraphicsIDStrengthBoulder:
                     context.Flags |= FlagStrength;
                     break;
-                case GraphicsIDCutTree:
-                    context.Flags |= FlagCut;
-                    break;
                 case GraphicsIDRockSmash:
                     context.Flags |= FlagRockSmash;
+                    break;
+                case GraphicsIDCutTree:
+                    context.Flags |= FlagCut;
                     break;
             }
         }

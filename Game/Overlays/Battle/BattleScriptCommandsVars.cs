@@ -9,11 +9,67 @@ public sealed class BattleScriptTaskData
     public int SeqNum;
     public int Flag;
     public int Ball;
+    public BallRotation? BallRotation;
+    public byte MsgIdx;
+    public int Counter;
+    public int Shakes;
+    public int ShakesLeft;
+    public object? DisplayData;
+    public object? DisplayArgs;
 }
 
 public static partial class BattleScripts
 {
     private const uint BattlerStatusSwitching = 1;
+    private const int BallThrowTargetBase = 0x4E20;
+    private const int HeapIDBattle = 5;
+    private const uint BattleTypeCatchingDemo = 0x600;
+    private const ushort SeqBallThrow = 0x70A;
+    private const ushort SeqBallDeflect = 0x5E6;
+    private const ushort SeqBallOpen = 0x708;
+    private const ushort SeqBallLock = 0x709;
+    private const ushort SeqTouchConfirm = 0x5DC;
+    private const int BallSoundPan = 0x75;
+    private const ushort BgmCaught = 0x467;
+    private const int MsgGotcha = 0x363;
+    private const int MsgGiveNickname = 0x364;
+    private const int MsgDexRegistered = 0x367;
+    private const int MsgTrainerBlocked = 0x35B;
+    private const int MsgDontBeAThief = 0x35C;
+    private const int MsgBrokeFreeBase = 0x35F;
+    private const int MsgSentToBox = 0x496;
+    private const int MsgSentToOtherBox = 0x498;
+    private const int MonDataNicknameString = 0x78;
+    private const int MonDataMove1PP = 0x3A;
+    private const int MonDataMove1MaxPP = 0x42;
+    private const int MonSpriteX = 0;
+    private const int PadButtonA = 1;
+    private const int NamingScreenTypePokemon = 1;
+    private const int NicknameMaxChars = 10;
+    private const uint NamingScreenTemplate = 0x020F2DAC;
+    private const int RecordNicknamedMons = 0x31;
+    private const byte BattleResultCaught = 4;
+    private const int MaxShakes = 4;
+    private const int ItemMasterBall = 1;
+    private const int ItemSafariBall = 5;
+    private const int ItemNetBall = 6;
+    private const int ItemDiveBall = 7;
+    private const int ItemNestBall = 8;
+    private const int ItemRepeatBall = 9;
+    private const int ItemTimerBall = 10;
+    private const int ItemDuskBall = 13;
+    private const int ItemQuickBall = 15;
+    private const uint SafariCatchRateTable = 0x0226E638;
+    private const uint BallRateTable = 0x0226E570;
+    private const int SpeciesDataCatchRate = 8;
+    private const int TypeBug = 6;
+    private const int TerrainCave = 5;
+    private const int TerrainWater = 7;
+    private const int TimeNight = 3;
+    private const int TimeLateNight = 4;
+    private const uint StatusPoison = 8;
+    private const uint StatusFreeze = 0x20;
+    private const uint StatusToxic = 0x80;
     private const uint BattleTypeLinkDoubles = 6;
     private const int LinkWaitingShift = 28;
     private const uint LinkWaitingMask = 0xF0000000;
@@ -695,9 +751,647 @@ public static partial class BattleScripts
         return 0;
     }
 
+    private static void BattleScript_PrintCatchMessage(BattleScriptTaskData data, MessageLoader msgLoader, int tags, int id, params int[] messageParams)
+    {
+        BattleMessage message = new();
+        message.Tags = (byte)tags;
+        message.Id = (ushort)id;
+        for (int i = 0; i < messageParams.Length; i++)
+        {
+            message.Params[i] = messageParams[i];
+        }
+        data.MsgIdx = BattleMessages.BattleMessage_Print(data.BattleSys!, msgLoader, message, BattleMessages.BattleSystem_GetTextSpeed(data.BattleSys!));
+    }
+
+    private static void BattleScript_FadeOutCatchScene(BattleScriptTaskData data, PaletteData paletteData, PokemonSpriteManager monSpriteMan, ushort buffers)
+    {
+        PaletteAnimator.PaletteAnimator_SetMode(BattleSystems.BattleSystem_GetPaletteAnimator(data.BattleSys!)!, 1);
+        PaletteData.PaletteData_StartFade(paletteData, buffers, 0xFFFF, 1, 0, 16, 0);
+        PokemonSpriteManager.PokemonSpriteManager_StartFadeAll(monSpriteMan, 0, 16, 0, 0);
+    }
+
+    private static bool BattleScript_CatchMessageDone(BattleScriptTaskData data)
+    {
+        if (Text.Text_IsPrinterActive(data.MsgIdx) != 0)
+        {
+            return false;
+        }
+        data.Counter--;
+        return data.Counter == 0;
+    }
+
+    private static void BattleScript_EndCatchMonTask(SysTask task, BattleScriptTaskData data)
+    {
+        data.BattleCtx!.TaskData = null;
+        SysTask.SysTask_Done(task);
+    }
+
+    // OFFSET 0x02249B80
     private static void BattleScript_CatchMonTask(SysTask task, object? param)
     {
-        throw Missing(0x02249B80);
+        BattleScriptTaskData data = (BattleScriptTaskData)param!;
+        BattleSystem battleSys = data.BattleSys!;
+        BattleContext battleCtx = data.BattleCtx!;
+        MessageLoader msgLoader = BattleSystems.BattleSystem_GetMessageLoader(battleSys)!;
+        PaletteData paletteData = BattleSystems.BattleSystem_GetPaletteData(battleSys)!;
+        PokemonSpriteManager monSpriteMan = BattleSystems.BattleSystem_GetPokemonSpriteManager(battleSys)!;
+        int battler = 1;
+        if ((HealthBar.FlagIndex(battler) & battleCtx.BattlersSwitchingMask) != 0)
+        {
+            battler = 3;
+        }
+        switch (data.SeqNum)
+        {
+            case 0:
+                if (data.Flag == 0)
+                {
+                    BallThrow template = new();
+                    template.Mode = 3;
+                    template.HeapID = HeapIDBattle;
+                    template.Target = battler + BallThrowTargetBase;
+                    template.BallID = data.Ball;
+                    template.SpriteSys = BattleSystems.BattleSystem_GetSpriteSystem(battleSys);
+                    template.PaletteData = BattleSystems.BattleSystem_GetPaletteData(battleSys);
+                    template.BgPrio = 1;
+                    template.Surface = 0;
+                    template.BattleSys = battleSys;
+                    if ((BattleSystems.BattleSystem_GetBattleType(battleSys) & BattleTypeDoubles) != 0)
+                    {
+                        template.Type = battler == 1 ? 0x10 : 0x11;
+                    }
+                    else
+                    {
+                        template.Type = 0xF;
+                    }
+                    data.BallRotation = BallRotations.BallRotation_New(template);
+                }
+                else
+                {
+                    BattlerData battlerData = BattleSystems.BattleSystem_GetBattlerData(battleSys, 0)!;
+                    if (BallRotations.BallRotation_GetMode(battlerData.BallRotation) == BallRotations.ModeHold)
+                    {
+                        return;
+                    }
+                    data.BallRotation = battlerData.BallRotation;
+                    battlerData.BallRotation = null;
+                }
+                data.SeqNum = 1;
+                SoundPlayback.Sound_PlayEffect(SeqBallThrow);
+                battleSys.BallsThrown++;
+                BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 0);
+                return;
+            case 1:
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0)
+                {
+                    return;
+                }
+                if ((BattleSystems.BattleSystem_GetBattleType(battleSys) & BattleTypeTrainer) != 0)
+                {
+                    SoundPlayback.Sound_PlayPannedEffect(SeqBallDeflect, BallSoundPan);
+                    BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 2);
+                    data.SeqNum = 0x19;
+                    return;
+                }
+                SoundPlayback.Sound_PlayPannedEffect(SeqBallOpen, BallSoundPan);
+                BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 1);
+                data.SeqNum = 2;
+                data.Counter = 0x17;
+                return;
+            case 2:
+                data.Counter--;
+                if (data.Counter != 0)
+                {
+                    return;
+                }
+                BattleIO.BattleIO_ReturnToBall(battleSys, battler, data.Ball);
+                data.Shakes = BattleScript_CalcCatchShakes(battleSys, battleCtx);
+                data.ShakesLeft = data.Shakes < MaxShakes ? data.Shakes : 3;
+                data.SeqNum = 3;
+                return;
+            case 3:
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0 || BattleIO.BattleIO_QueueIsEmpty(battleCtx) == 0)
+                {
+                    return;
+                }
+                BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 3);
+                data.SeqNum = 4;
+                return;
+            case 4:
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0)
+                {
+                    return;
+                }
+                data.SeqNum = 5;
+                return;
+            case 5:
+                if (data.ShakesLeft == 0)
+                {
+                    if (data.Shakes == MaxShakes)
+                    {
+                        data.SeqNum = 7;
+                        data.Counter = 12;
+                        return;
+                    }
+                    data.SeqNum = 0x1C;
+                    return;
+                }
+                BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 4);
+                data.SeqNum = 6;
+                data.Counter = 12;
+                return;
+            case 6:
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0)
+                {
+                    return;
+                }
+                data.Counter--;
+                if (data.Counter != 0)
+                {
+                    return;
+                }
+                data.ShakesLeft--;
+                data.SeqNum = 5;
+                return;
+            case 7:
+                data.Counter--;
+                if (data.Counter != 0)
+                {
+                    return;
+                }
+                BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 6);
+                SoundPlayback.Sound_PlayPannedEffect(SeqBallLock, BallSoundPan);
+                data.SeqNum = 8;
+                return;
+            case 8:
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0)
+                {
+                    return;
+                }
+                BattleScript_PrintCatchMessage(data, msgLoader, 0x82, MsgGotcha, battler);
+                data.Counter = 0x1E;
+                data.SeqNum = 9;
+                SoundPlayback.Sound_PlayBGM(BgmCaught);
+                Battle.BattleSystem_SetRedHPSoundFlag(battleSys, 2);
+                return;
+            case 9:
+                if (Text.Text_IsPrinterActive(data.MsgIdx) != 0)
+                {
+                    return;
+                }
+                data.SeqNum = 0xA;
+                BallRotations.BallRotation_SetCatchMode(data.BallRotation!, 7);
+                return;
+            case 0xA:
+            {
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0)
+                {
+                    return;
+                }
+                data.Counter--;
+                if (data.Counter != 0)
+                {
+                    return;
+                }
+                Battle.BattleSystem_SetCaughtBattlerIdx(battleSys, battler);
+                Pokemon mon = BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]);
+                if ((BattleSystems.BattleSystem_GetBattleType(battleSys) & BattleTypeCatchingDemo) != 0)
+                {
+                    BattleContexts.BattleSystem_SetPokemonCatchData(battleSys, battleCtx, BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]));
+                    BattleScript_FadeOutCatchScene(data, paletteData, monSpriteMan, 0xF);
+                    data.SeqNum = 0x20;
+                    return;
+                }
+                if (BattleSystems.BattleSystem_CaughtSpecies(battleSys, (int)Pokemon.Pokemon_GetValue(mon, MonDataSpecies, null)) != 0)
+                {
+                    BattleScript_FadeOutCatchScene(data, paletteData, monSpriteMan, 5);
+                    data.SeqNum = 0x10;
+                    return;
+                }
+                BattleScript_PrintCatchMessage(data, msgLoader, 0x82, MsgDexRegistered, battler);
+                data.Counter = 0x1E;
+                data.SeqNum = 0xB;
+                BattleSystems.BattleSystem_IncrementTrainerScore(battleSys);
+                return;
+            }
+            case 0xB:
+                if (!BattleScript_CatchMessageDone(data))
+                {
+                    return;
+                }
+                data.SeqNum = 0xC;
+                PaletteData.PaletteData_StartFade(paletteData, 5, 0xFFFF, 1, 0, 16, 0);
+                PokemonSpriteManager.PokemonSpriteManager_StartFadeAll(monSpriteMan, 0, 16, 0, 0);
+                PaletteAnimator.PaletteAnimator_SetMode(BattleSystems.BattleSystem_GetPaletteAnimator(battleSys)!, 1);
+                return;
+            case 0xC:
+            {
+                if (PaletteData.PaletteData_GetSelectedBuffersMask(paletteData) != 0)
+                {
+                    return;
+                }
+                BallRotations.BallRotation_Free(data.BallRotation);
+                PokemonSpriteManager.PokemonSpriteManager_DeleteAll(monSpriteMan);
+                Battle.BattleSystem_FreeMainBackgrounds(battleSys);
+                BattleTerrainSprites.TerrainSprite_SetDrawFlag(BattleSystems.BattleSystem_GetTerrainSprite(battleSys, 0), 0);
+                BattleTerrainSprites.TerrainSprite_SetDrawFlag(BattleSystems.BattleSystem_GetTerrainSprite(battleSys, 1), 0);
+                BattleDisplay.Battler_SetTrainerSpriteDrawFlag(BattleSystems.BattleSystem_GetBattlerData(battleSys, 0)!, 0);
+                PokedexEntryScreenParams screenParams = new();
+                screenParams.BgConfig = BattleSystems.BattleSystem_GetBgConfig(battleSys);
+                screenParams.PaletteData = BattleSystems.BattleSystem_GetPaletteData(battleSys);
+                screenParams.MonSpriteMan = monSpriteMan;
+                screenParams.HeapID = HeapIDBattle;
+                screenParams.Mon = BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]);
+                screenParams.DexMode = DexMode.Pokedex_GetDexMode(BattleSystems.BattleSystem_GetPokedex(battleSys)!);
+                data.DisplayArgs = CharTransfer.CharTransfer_PopTaskManager();
+                data.DisplayData = PokedexEntryScreen_New(screenParams);
+                data.SeqNum = 0xD;
+                return;
+            }
+            case 0xD:
+                if (!PokedexEntryScreen_IsReady(data.DisplayData))
+                {
+                    return;
+                }
+                if ((Globals.gSystem.PressedKeys & PadButtonA) != 0)
+                {
+                    data.SeqNum = 0xE;
+                }
+                else if (TouchScreen.TouchScreen_Tapped())
+                {
+                    SoundPlayback.Sound_PlayEffect(SeqTouchConfirm);
+                    data.SeqNum = 0xE;
+                }
+                if (data.SeqNum == 0xE)
+                {
+                    PaletteData.PaletteData_StartFade(paletteData, 5, 0xFFFF, 1, 0, 16, 0);
+                    PokedexEntryScreen_StartExit(data.DisplayData, false);
+                }
+                return;
+            case 0xE:
+            {
+                PokemonSprite sprite = PokedexEntryScreen_GetSprite(data.DisplayData);
+                PokemonSprite.PokemonSprite_AddAttribute(sprite, MonSpriteX, 4);
+                if (PokemonSprite.PokemonSprite_GetAttribute(sprite, MonSpriteX) >= 0x80)
+                {
+                    PokemonSprite.PokemonSprite_SetAttribute(sprite, MonSpriteX, 0x80);
+                    data.SeqNum = 0xF;
+                }
+                return;
+            }
+            case 0xF:
+                PokedexEntryScreen_Free(data.DisplayData);
+                CharTransfer.CharTransfer_PushTaskManager((CharTransferTaskManager?)data.DisplayArgs);
+                Battle.BattleSystem_RestoreMainBackgrounds(battleSys);
+                PaletteData.PaletteData_StartFade(paletteData, 5, 0xFFFF, 1, 16, 0, 0);
+                data.SeqNum = 0x11;
+                return;
+            case 0x10:
+            {
+                if (PaletteData.PaletteData_GetSelectedBuffersMask(paletteData) != 0)
+                {
+                    return;
+                }
+                Pokemon mon = BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]);
+                BallRotations.BallRotation_Free(data.BallRotation);
+                PokemonSpriteManager.PokemonSpriteManager_DeleteAll(monSpriteMan);
+                BattleDisplay.Battler_SetTrainerSpriteDrawFlag(BattleSystems.BattleSystem_GetBattlerData(battleSys, 0)!, 0);
+                Battle.BattleSystem_FreeMainBackgrounds(battleSys);
+                Battle.BattleSystem_RestoreMainBackgrounds(battleSys);
+                PokemonSpriteTemplate spriteTemplate = new();
+                PokemonSpriteTemplates.Pokemon_BuildSpriteTemplate(spriteTemplate, mon, 2);
+                PokemonSpriteManager.PokemonSpriteManager_CreateSprite(monSpriteMan, spriteTemplate, 0x80, 0x48, 0, 0, null, null);
+                PaletteData.PaletteData_StartFade(paletteData, 5, 0xFFFF, 1, 16, 0, 0);
+                PokemonSpriteManager.PokemonSpriteManager_StartFadeAll(monSpriteMan, 16, 0, 0, 0);
+                data.SeqNum = 0x11;
+                return;
+            }
+            case 0x11:
+                if (PaletteData.PaletteData_GetSelectedBuffersMask(paletteData) != 0)
+                {
+                    return;
+                }
+                data.SeqNum = 0x12;
+                PaletteAnimator.PaletteAnimator_SetMode(BattleSystems.BattleSystem_GetPaletteAnimator(battleSys)!, 0);
+                PaletteData.PaletteData_SetAutoTransparent(paletteData, 1);
+                return;
+            case 0x12:
+                BattleIO.BattleIO_ShowYesNoMenu(battleSys, battleCtx, 0, MsgGiveNickname, 5, 0, battleCtx.SelectedPartySlot[battler] | battler);
+                data.SeqNum++;
+                return;
+            case 0x13:
+            {
+                if (BattleContexts.BattleContext_IOBufferVal(battleCtx, 0) == 0)
+                {
+                    return;
+                }
+                if (BattleContexts.BattleContext_IOBufferVal(battleCtx, 0) == 0xFF)
+                {
+                    data.SeqNum = 0x16;
+                    return;
+                }
+                BattleScript_FadeOutCatchScene(data, paletteData, monSpriteMan, 0xF);
+                data.SeqNum = 0x14;
+                return;
+            }
+            case 0x14:
+            {
+                if (PaletteData.PaletteData_GetSelectedBuffersMask(paletteData) != 0)
+                {
+                    return;
+                }
+                ScreenFadeControl.SetScreenColorBrightness(0, 0);
+                ScreenFadeControl.SetScreenColorBrightness(1, 0);
+                Pokemon mon = BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]);
+                int species = (int)Pokemon.Pokemon_GetValue(mon, MonDataSpecies, null);
+                NamingScreenArgs args = NamingScreenArgs.NamingScreenArgs_Init(HeapIDBattle, NamingScreenTypePokemon, species, NicknameMaxChars, BattleSystems.BattleSystem_GetOptions(battleSys));
+                data.DisplayArgs = args;
+                args.BattleMsgID = BattleSystems.BattleSystem_GetPartyCount(battleSys, 0) >= PartySizeMax ? BattleSystems.BattleSystem_GetMetBebe(battleSys) + MsgSentToBox : 0;
+                args.MonForm = (int)Pokemon.Pokemon_GetValue(mon, MonDataForm, null);
+                args.PcBoxes = BattleSystems.BattleSystem_GetPCBoxes(battleSys);
+                args.MonGender = (int)Pokemon.Pokemon_GetValue(mon, MonDataGender, null);
+                data.DisplayData = ApplicationManager.ApplicationManager_New(ApplicationTemplate.At(NamingScreenTemplate), args, HeapIDBattle);
+                data.SeqNum = 0x15;
+                Battle.BattleSystem_FreeHealthboxes(battleSys);
+                for (int i = 0; i < BattleSystems.BattleSystem_GetMaxBattlers(battleSys); i++)
+                {
+                    BattlerData battlerData = BattleSystems.BattleSystem_GetBattlerData(battleSys, i)!;
+                    if (battlerData.ManagedSprite != null)
+                    {
+                        SpriteSystem.Sprite_DeleteAndFreeResources(battlerData.ManagedSprite);
+                        battlerData.ManagedSprite = null;
+                    }
+                }
+                Battle.BattleSystem_FreeGraphics(battleSys);
+                BattleSystems.BattleSystem_SetRenderMode(battleSys, 1);
+                return;
+            }
+            case 0x15:
+            {
+                if (!ApplicationManager.ApplicationManager_Exec((ApplicationManager)data.DisplayData!))
+                {
+                    return;
+                }
+                NamingScreenArgs args = (NamingScreenArgs)data.DisplayArgs!;
+                Pokemon mon = BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]);
+                if (args.ReturnCode == 0)
+                {
+                    Pokemon.Pokemon_SetValue(mon, MonDataNicknameString, args.TextInputStr);
+                    BattleSystems.BattleSystem_IncrementRecord(battleSys, RecordNicknamedMons);
+                }
+                NamingScreenArgs.NamingScreenArgs_Free(args);
+                ApplicationManager.ApplicationManager_Free((ApplicationManager)data.DisplayData!);
+                BattleSystems.BattleSystem_SetRenderMode(battleSys, 2);
+                data.SeqNum = 0x17;
+                return;
+            }
+            case 0x16:
+            case 0x17:
+            {
+                if (PaletteData.PaletteData_GetSelectedBuffersMask(paletteData) != 0)
+                {
+                    return;
+                }
+                Party party = BattleSystems.BattleSystem_GetParty(battleSys, 0);
+                Pokemon mon = BattleSystems.BattleSystem_GetPartyPokemon(battleSys, battler, battleCtx.SelectedPartySlot[battler]);
+                BattleSystems.BattleSystem_RegisterCaughtPokemon(battleSys, battler);
+                BattleContexts.BattleSystem_SetPokemonCatchData(battleSys, battleCtx, mon);
+                BattleSystems.BattleSystem_AddToPoketchHistory(battleSys, mon);
+                BattleSystems.BattleSystem_RecordCaptureAttempt(battleSys, mon);
+                BattleIO.BattleIO_PrintAlertMessage(battleSys, 0, 0, 9);
+                if (Party.Party_AddPokemon(party, mon))
+                {
+                    if (data.SeqNum == 0x16)
+                    {
+                        BattleScript_FadeOutCatchScene(data, paletteData, monSpriteMan, 0xF);
+                    }
+                    data.SeqNum = 0x20;
+                    return;
+                }
+                PCBoxes boxes = BattleSystems.BattleSystem_GetPCBoxes(battleSys)!;
+                int currentBox = PCBoxes.PCBoxes_GetCurrentBoxID(boxes);
+                int box = PCBoxes.PCBoxes_FirstEmptyBox(boxes);
+                PCBoxes.PCBoxes_SetCurrentBox(boxes, box);
+                for (int i = 0; i < 4; i++)
+                {
+                    int maxPP = (int)Pokemon.Pokemon_GetValue(mon, MonDataMove1MaxPP + i, null);
+                    Pokemon.Pokemon_SetValue(mon, MonDataMove1PP + i, maxPP);
+                }
+                if (Pokemon.Pokemon_SetGiratinaFormByHeldItem(mon) != -1)
+                {
+                    BattleSystems.BattleSystem_RegisterCaughtPokemon(battleSys, battler);
+                }
+                PCBoxes.PCBoxes_TryStoreBoxMonInBox(boxes, box, Pokemon.Pokemon_GetBoxPokemon(mon));
+                if (data.SeqNum != 0x16)
+                {
+                    data.SeqNum = 0x20;
+                    return;
+                }
+                if (currentBox == box)
+                {
+                    BattleScript_PrintCatchMessage(data, msgLoader, 0x93, BattleSystems.BattleSystem_GetMetBebe(battleSys) + MsgSentToBox, battler, currentBox);
+                }
+                else
+                {
+                    BattleScript_PrintCatchMessage(data, msgLoader, 0xAF, BattleSystems.BattleSystem_GetMetBebe(battleSys) + MsgSentToOtherBox, battler, currentBox, box);
+                }
+                data.Counter = 0x1E;
+                data.SeqNum = 0x18;
+                return;
+            }
+            case 0x18:
+                if (!BattleScript_CatchMessageDone(data))
+                {
+                    return;
+                }
+                BattleScript_FadeOutCatchScene(data, paletteData, monSpriteMan, 0xF);
+                data.SeqNum = 0x20;
+                return;
+            case 0x19:
+                if (BallRotations.BallRotation_UpdateCatchMode(data.BallRotation!) != 0)
+                {
+                    return;
+                }
+                BallRotations.BallRotation_Free(data.BallRotation);
+                BattleScript_PrintCatchMessage(data, msgLoader, 0, MsgTrainerBlocked);
+                data.Counter = 0x1E;
+                data.SeqNum = 0x1A;
+                return;
+            case 0x1A:
+                if (!BattleScript_CatchMessageDone(data))
+                {
+                    return;
+                }
+                BattleScript_PrintCatchMessage(data, msgLoader, 0, MsgDontBeAThief);
+                data.Counter = 0x1E;
+                data.SeqNum = 0x1B;
+                return;
+            case 0x1B:
+                if (!BattleScript_CatchMessageDone(data))
+                {
+                    return;
+                }
+                BattleScript_EndCatchMonTask(task, data);
+                return;
+            case 0x1C:
+                BattleIO.BattleIO_ShowPokemon(battleSys, battler, data.Ball, 1);
+                data.SeqNum = 0x1D;
+                data.Counter = 2;
+                return;
+            case 0x1D:
+                data.Counter--;
+                if (data.Counter != 0)
+                {
+                    return;
+                }
+                BallRotations.BallRotation_Free(data.BallRotation);
+                data.SeqNum = 0x1E;
+                return;
+            case 0x1E:
+                if (BattleIO.BattleIO_QueueIsEmpty(battleCtx) == 0)
+                {
+                    return;
+                }
+                BattleScript_PrintCatchMessage(data, msgLoader, 0, data.Shakes + MsgBrokeFreeBase);
+                data.Counter = 0x1E;
+                data.SeqNum = 0x1F;
+                return;
+            case 0x1F:
+                if (!BattleScript_CatchMessageDone(data))
+                {
+                    return;
+                }
+                BattleScript_EndCatchMonTask(task, data);
+                return;
+            case 0x20:
+                if (PaletteData.PaletteData_GetSelectedBuffersMask(paletteData) != 0)
+                {
+                    return;
+                }
+                if ((BattleSystems.BattleSystem_GetBattleType(battleSys) & BattleTypeCatchingDemo) != 0)
+                {
+                    BallRotations.BallRotation_Free(data.BallRotation);
+                    PokemonSpriteManager.PokemonSpriteManager_DeleteAll(monSpriteMan);
+                }
+                battleSys.ResultMask = BattleResultCaught;
+                BattleScript_EndCatchMonTask(task, data);
+                return;
+        }
+    }
+
+    // OFFSET 0x0224A724
+    private static int BattleScript_CalcCatchShakes(BattleSystem battleSys, BattleContext battleCtx)
+    {
+        if ((BattleSystems.BattleSystem_GetBattleType(battleSys) & BattleTypeCatchingDemo) != 0)
+        {
+            return MaxShakes;
+        }
+        BattleMon defender = battleCtx.BattleMons[battleCtx.Defender];
+        uint catchRate;
+        if (battleCtx.MsgItemTemp == ItemSafariBall)
+        {
+            byte[] stage = RomData.Overlay(16, (uint)(SafariCatchRateTable + battleCtx.SafariCatchStage * 2), 2);
+            catchRate = SpeciesData.SpeciesData_GetSpeciesValue(defender.Species, SpeciesDataCatchRate) * stage[0] / stage[1];
+        }
+        else
+        {
+            catchRate = SpeciesData.SpeciesData_GetSpeciesValue(defender.Species, SpeciesDataCatchRate);
+        }
+        int type1 = BattleContexts.BattleMon_Get(battleCtx, battleCtx.Defender, BattleContexts.BattleMonType1, null);
+        int type2 = BattleContexts.BattleMon_Get(battleCtx, battleCtx.Defender, BattleContexts.BattleMonType2, null);
+        uint ballRate = 10;
+        int ball = battleCtx.MsgItemTemp;
+        if (ball <= ItemSafariBall)
+        {
+            ballRate = RomData.Overlay(16, (uint)(BallRateTable + ball - 2), 1)[0];
+        }
+        else
+        {
+            switch (ball)
+            {
+                case ItemNetBall:
+                    if (type1 == TypeWater || type2 == TypeWater || type1 == TypeBug || type2 == TypeBug)
+                    {
+                        ballRate = 30;
+                    }
+                    break;
+                case ItemDiveBall:
+                    if (BattleSystems.BattleSystem_GetTerrain(battleSys) == TerrainWater)
+                    {
+                        ballRate = 35;
+                    }
+                    break;
+                case ItemNestBall:
+                    if (defender.Level < 40)
+                    {
+                        ballRate = (uint)(40 - defender.Level);
+                        if (ballRate < 10)
+                        {
+                            ballRate = 10;
+                        }
+                    }
+                    break;
+                case ItemRepeatBall:
+                    if (BattleSystems.BattleSystem_CaughtSpecies(battleSys, defender.Species) == 1)
+                    {
+                        ballRate = 30;
+                    }
+                    break;
+                case ItemTimerBall:
+                    ballRate = (uint)(battleCtx.TotalTurns + 10);
+                    if (ballRate > 40)
+                    {
+                        ballRate = 40;
+                    }
+                    break;
+                case ItemDuskBall:
+                    if (BattleSystems.BattleSystem_GetTime(battleSys) == TimeNight || BattleSystems.BattleSystem_GetTime(battleSys) == TimeLateNight || BattleSystems.BattleSystem_GetTerrain(battleSys) == TerrainCave)
+                    {
+                        ballRate = 35;
+                    }
+                    break;
+                case ItemQuickBall:
+                    if (battleCtx.TotalTurns < 1)
+                    {
+                        ballRate = 40;
+                    }
+                    break;
+            }
+        }
+        uint maxHP3 = defender.MaxHP * 3;
+        uint rate = catchRate * ballRate / 10;
+        rate = (maxHP3 - (uint)defender.CurHP * 2) * rate / maxHP3;
+        if ((defender.Status & (StatusSleep | StatusFreeze)) != 0)
+        {
+            rate *= 2;
+        }
+        if ((defender.Status & (StatusPoison | StatusBurn | StatusParalysis | StatusToxic)) != 0)
+        {
+            rate = rate * 15 / 10;
+        }
+        int shakes;
+        if (rate >= 0xFF)
+        {
+            shakes = MaxShakes;
+        }
+        else
+        {
+            uint ratio = MathCoprocessor.Div32(0xFF0000, (int)rate);
+            uint shakeThreshold = 0xFFFF0 / MathCoprocessor.Sqrt32(MathCoprocessor.Sqrt32(ratio));
+            shakes = 0;
+            while (BattleSystems.BattleSystem_RandNext(battleSys) < shakeThreshold)
+            {
+                shakes++;
+                if (shakes >= MaxShakes)
+                {
+                    break;
+                }
+            }
+            if (battleCtx.MsgItemTemp == ItemMasterBall)
+            {
+                shakes = MaxShakes;
+            }
+        }
+        return shakes;
     }
 }
 
