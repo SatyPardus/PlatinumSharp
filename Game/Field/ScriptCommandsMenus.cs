@@ -11,6 +11,12 @@ public static partial class ScriptCommands
         ported[0x020409C0] = ScrCmd_AddMenuEntryImm;
         ported[0x020409E8] = ScrCmd_AddMenuEntry;
         ported[0x02040A2C] = ScrCmd_ShowMenu;
+        ported[0x02040AE8] = ScrCmd_InitGlobalTextListMenu;
+        ported[0x02040B70] = ScrCmd_InitLocalTextListMenu;
+        ported[0x02040BF8] = ScrCmd_AddListMenuEntry;
+        ported[0x02040C58] = ScrCmd_ShowListMenu;
+        ported[0x02040C7C] = ScrCmd_ShowListMenuSetWidth;
+        ported[0x02040CB8] = ScrCmd_ShowListMenuRememberCursor;
         ported[0x02040D08] = ScrCmd_ShowMenuMultiColumn;
     }
 
@@ -81,6 +87,72 @@ public static partial class ScriptCommands
     {
         FieldMenuManager menuManager = (FieldMenuManager)Manager(ctx).FieldMenuManager!;
         FieldMenus.FieldMenuManager_ShowMultiColumnMenu(menuManager, ScriptContext.ScriptContext_ReadByte(ctx));
+        ScriptContext.ScriptContext_Pause(ctx, ScriptContext_WaitForMenuSelection);
+        return true;
+    }
+
+    private static bool ScrCmd_InitTextListMenu(ScriptContext ctx, MessageLoader? loader)
+    {
+        FieldSystem fieldSystem = ctx.FieldSystem;
+        ScriptManager manager = Manager(ctx);
+        byte anchorX = ScriptContext.ScriptContext_ReadByte(ctx);
+        byte anchorY = ScriptContext.ScriptContext_ReadByte(ctx);
+        byte initialCursorPos = ScriptContext.ScriptContext_ReadByte(ctx);
+        byte canExitWithB = ScriptContext.ScriptContext_ReadByte(ctx);
+        ushort varID = ScriptContext.ScriptContext_ReadHalfWord(ctx);
+        BufferView selectedOption = FieldSystemVarsFlags.FieldSystem_GetVarPointer(fieldSystem, varID)!;
+        manager.FieldMenuManager = FieldMenus.FieldMenuManager_New2(fieldSystem, anchorX, anchorY, initialCursorPos, canExitWithB, selectedOption, manager.StringTemplate, manager.Window, loader);
+        ctx.Data[0] = varID;
+        return true;
+    }
+
+    // OFFSET 0x02040AE8
+    private static bool ScrCmd_InitGlobalTextListMenu(ScriptContext ctx)
+    {
+        return ScrCmd_InitTextListMenu(ctx, null);
+    }
+
+    // OFFSET 0x02040B70
+    private static bool ScrCmd_InitLocalTextListMenu(ScriptContext ctx)
+    {
+        return ScrCmd_InitTextListMenu(ctx, ctx.Loader);
+    }
+
+    // OFFSET 0x02040BF8
+    private static bool ScrCmd_AddListMenuEntry(ScriptContext ctx)
+    {
+        FieldMenuManager menuManager = (FieldMenuManager)Manager(ctx).FieldMenuManager!;
+        ushort entryID = VarValue(ctx);
+        ushort altTextStringID = VarValue(ctx);
+        ushort entryIndex = VarValue(ctx);
+        FieldMenus.FieldMenuManager_AddListMenuEntry(menuManager, (byte)entryID, (byte)altTextStringID, (byte)entryIndex);
+        return false;
+    }
+
+    // OFFSET 0x02040C58
+    private static bool ScrCmd_ShowListMenu(ScriptContext ctx)
+    {
+        FieldMenus.FieldMenuManager_ShowListMenu((FieldMenuManager)Manager(ctx).FieldMenuManager!);
+        ScriptContext.ScriptContext_Pause(ctx, ScriptContext_WaitForMenuSelection);
+        return true;
+    }
+
+    // OFFSET 0x02040C7C
+    private static bool ScrCmd_ShowListMenuSetWidth(ScriptContext ctx)
+    {
+        FieldMenuManager menuManager = (FieldMenuManager)Manager(ctx).FieldMenuManager!;
+        FieldMenus.FieldMenuManager_ShowListMenuWithWidth(menuManager, VarValue(ctx));
+        ScriptContext.ScriptContext_Pause(ctx, ScriptContext_WaitForMenuSelection);
+        return true;
+    }
+
+    // OFFSET 0x02040CB8
+    private static bool ScrCmd_ShowListMenuRememberCursor(ScriptContext ctx)
+    {
+        FieldMenuManager menuManager = (FieldMenuManager)Manager(ctx).FieldMenuManager!;
+        BufferView listOffset = VarPointer(ctx);
+        BufferView cursorPos = VarPointer(ctx);
+        FieldMenus.FieldMenuManager_ShowListMenuWithCursorPosition(menuManager, listOffset, cursorPos);
         ScriptContext.ScriptContext_Pause(ctx, ScriptContext_WaitForMenuSelection);
         return true;
     }

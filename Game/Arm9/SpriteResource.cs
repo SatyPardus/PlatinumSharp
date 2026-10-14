@@ -915,7 +915,15 @@ public sealed class SpriteResourceCollection
         byte[]? data = NARC.NARC_AllocAndReadWholeMember(narc, (uint)memberIndex, heapID);
         if (data != null && compressed != 0)
         {
-            data = Lz.TryDecompress(data);
+            uint size = Nitro.Bin.U32(data, 0) >> 8;
+            byte[]? decompressed = allocAtEnd == 0 ? Heap.Heap_Alloc(heapID, size) : Heap.Heap_AllocAtEnd(heapID, size);
+            if (decompressed != null)
+            {
+                byte[] unpacked = Lz.TryDecompress(data)!;
+                Array.Copy(unpacked, decompressed, Math.Min(unpacked.Length, decompressed.Length));
+            }
+            Heap.Heap_Free(data);
+            data = decompressed;
         }
         return data;
     }

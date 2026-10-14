@@ -1654,3 +1654,15 @@ public sealed class Underground : ISaveBlock
         return (Underground)SaveData.SaveData_SaveTable(saveData, SaveDataTable.EntryUnderground);
     }
 }
+
+public static class UndergroundGoods
+{
+    private const uint GoodsTable = 0x020EC5A8;
+    private const int GoodsEntrySize = 0x1C;
+
+    // OFFSET 0x0205745C
+    public static int UndergroundGoods_GetPrice(int goodsID)
+    {
+        return (int)RomData.Arm9U32((uint)(GoodsTable + goodsID * GoodsEntrySize), 1)[0];
+    }
+}

@@ -12,7 +12,10 @@ public sealed partial class TestScript
     public const uint NewGameTemplate = 0x021D0F80;
 
     private const int KeyA = 0x001;
+    private const int KeyB = 0x002;
     private const int KeySelect = 0x004;
+    private const int RepeatsBeforeCancel = 10;
+    private const int RepeatsBeforeGivingUp = 14;
     private const int KeyStart = 0x008;
     private const int NameColumns = 10;
     private const int NameTapPeriod = 14;
@@ -69,6 +72,8 @@ public sealed partial class TestScript
     private string currentPosition = "";
     private int repeatedScript = -1;
     private readonly Dictionary<int, int> scriptStarts = new();
+    private readonly Dictionary<string, int> textRepeats = new();
+    private int menuDownPresses;
     private int loggedScript = -1;
     private readonly ExplorerMemory memory = ExplorerMemory.Load();
     private string? traceKey;
@@ -401,9 +406,47 @@ public sealed partial class TestScript
         return "nothing";
     }
 
+    private static bool MenuOpen()
+    {
+        if (sApplication.CurrentManager?.Data is not FieldSystem fieldSystem)
+        {
+            return false;
+        }
+        for (FieldTask? task = fieldSystem.Task; task != null; task = task.Previous)
+        {
+            if (task.Environment is ScriptManager scriptManager)
+            {
+                string? waiting = scriptManager.Contexts[0]?.ShouldResume?.Method.Name;
+                return waiting != null && waiting.Contains("Menu");
+            }
+        }
+        return false;
+    }
+
     private int Pulse()
     {
-        return stepFrame % PulsePeriod < PulseHold ? KeyA : 0;
+        bool pulseStart = stepFrame % PulsePeriod == 0;
+        bool held = stepFrame % PulsePeriod < PulseHold;
+        int repeats = textRepeats.Count > 0 ? textRepeats.Values.Max() : 0;
+        if (repeats >= RepeatsBeforeCancel)
+        {
+            return held ? KeyB : 0;
+        }
+        if (!MenuOpen())
+        {
+            menuDownPresses = 0;
+            return held ? KeyA : 0;
+        }
+        int wanted = Math.Max(0, repeats - 1);
+        if (menuDownPresses < wanted)
+        {
+            if (pulseStart)
+            {
+                menuDownPresses++;
+            }
+            return held ? KeyDown : 0;
+        }
+        return held ? KeyA : 0;
     }
 
     private void Fail(string status)
@@ -455,6 +498,7 @@ public sealed partial class TestScript
                     if (text.Length > 0 && text != loggedText)
                     {
                         loggedText = text;
+                        textRepeats[text] = textRepeats.GetValueOrDefault(text) + 1;
                         LastDialogue = text;
                         Log($"    says: {text}");
                     }
@@ -738,6 +782,7 @@ public sealed partial class TestScript
 
     private void ResetStep()
     {
+        textRepeats.Clear();
         stepFrame = 0;
         idleFrames = 0;
         stuckFrames = 0;
@@ -777,6 +822,7 @@ public sealed partial class TestScript
             return;
         }
         index++;
+        textRepeats.Clear();
         stepFrame = 0;
         idleFrames = 0;
         stuckFrames = 0;
@@ -815,6 +861,13 @@ public sealed partial class TestScript
             Log($"> step {index + 1}: {string.Join(' ', step)}" + (inField ? $"   [map {map} at ({x},{z})]" : ""));
         }
         LogDialogue();
+        if (textRepeats.Count > 0 && textRepeats.Values.Max() > RepeatsBeforeGivingUp)
+        {
+            string looping = textRepeats.First(entry => entry.Value > RepeatsBeforeGivingUp).Key;
+            textRepeats.Clear();
+            Fail($"{label}\n  FAILED: stuck in a dialogue loop (kept saying: {looping})");
+            return 0;
+        }
         if (repeatedScript >= 0)
         {
             int script = repeatedScript;

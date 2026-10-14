@@ -879,6 +879,7 @@ switch (args[0])
             File.Move(temp, target, true);
         }
         const int LiveFrameInterval = 6;
+        bool liveView = Environment.GetEnvironmentVariable("PLATINUMSHARP_LIVE") == "1";
         string LiveFramePath = Path.Combine(PlatinumSharp.Game.ProjectPaths.DashboardLive, "frame.png");
         string LiveStatusPath = Path.Combine(PlatinumSharp.Game.ProjectPaths.DashboardLive, "status.json");
         PlatinumSharp.Game.TestScript.Screenshot = SaveShot;
@@ -894,7 +895,7 @@ switch (args[0])
             {
                 SaveShot(frames.ToString());
             }
-            if (frames % LiveFrameInterval == 0)
+            if (liveView && frames % LiveFrameInterval == 0)
             {
                 try
                 {

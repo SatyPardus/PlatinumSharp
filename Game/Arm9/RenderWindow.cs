@@ -25,6 +25,7 @@ public sealed class Overlay5SpriteManager
     public readonly SpriteResourceList?[] Lists = new SpriteResourceList?[SpriteManager.ResourceTypes];
     public ushort NumTypes;
     public ushort HeapID;
+    public SpriteResourcesHeaderList? Headers;
 }
 
 public sealed class PokemonPreview

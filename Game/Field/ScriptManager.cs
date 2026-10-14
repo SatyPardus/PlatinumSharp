@@ -165,7 +165,7 @@ public sealed class ScriptManager
     public object? OverworldAnimManager;
     public SysTask? PlayerTask;
     public readonly Window SpecialCurrencyWindow = new();
-    public readonly Window MoneyWindow = new();
+    public Window? MoneyWindow;
     public object? SaveInfoWindow;
 
     private static byte[]? sHiddenItems;

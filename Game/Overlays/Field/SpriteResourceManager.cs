@@ -7,6 +7,95 @@ public static class SpriteResourceManager
     private const int FxOne = 0x1000;
     private const int TypesWithoutMultiCells = 4;
 
+    private const int PathMultiCell = 4;
+    private const int PathResdat = 6;
+    private const uint AffineScaleTable = 0x021F89C0;
+    private const int OverlayField = 5;
+
+    // OFFSET 0x021D2F14
+    public static void SpriteResourceManager_Init(Overlay5SpriteManager manager, string?[] resourcePaths, int maxSprites, int heapID)
+    {
+        manager.SpriteList = SpriteUtil.SpriteList_InitRendering(maxSprites, manager.Renderer, heapID);
+        manager.HeapID = (ushort)heapID;
+        manager.NumTypes = (ushort)(resourcePaths[PathMultiCell] == null ? TypesWithoutMultiCells : SpriteManager.ResourceTypes);
+        SpriteResourceTable[] tables = new SpriteResourceTable[manager.NumTypes];
+        for (int i = 0; i < manager.NumTypes; i++)
+        {
+            tables[i] = new SpriteResourceTable();
+            SpriteResourceTable table = SpriteResourceTable.SpriteResourceTable_GetArrayElement(tables, i);
+            byte[] data = GameSystem.ReadFileToHeap(heapID, resourcePaths[i]!)!;
+            SpriteResourceTable.SpriteResourceTable_LoadFromBinary(data, table, heapID);
+        }
+        for (int i = 0; i < manager.NumTypes; i++)
+        {
+            int count = SpriteResourceTable.SpriteResourceTable_GetCount(SpriteResourceTable.SpriteResourceTable_GetArrayElement(tables, i));
+            manager.Collections[i] = SpriteResourceCollection.SpriteResourceCollection_New(count, i, heapID);
+        }
+        for (int i = 0; i < manager.NumTypes; i++)
+        {
+            SpriteResourceTable table = SpriteResourceTable.SpriteResourceTable_GetArrayElement(tables, i);
+            manager.Lists[i] = SpriteResourceList.SpriteResourceList_New(SpriteResourceTable.SpriteResourceTable_GetCount(table), heapID);
+            SpriteResourceCollection.SpriteResourceCollection_Extend(manager.Collections[i], table, manager.Lists[i], heapID);
+        }
+        for (int i = 0; i < manager.NumTypes; i++)
+        {
+            SpriteResourceTable.SpriteResourceTable_Clear(SpriteResourceTable.SpriteResourceTable_GetArrayElement(tables, i));
+        }
+        SpriteTransfer.SpriteTransfer_RequestCharListAtEnd(manager.Lists[SpriteResource.TypeChar]);
+        SpriteTransfer.SpriteTransfer_RequestPlttFreeSpaceList(manager.Lists[SpriteResource.TypePltt]);
+        byte[] resdat = GameSystem.ReadFileToHeap(heapID, resourcePaths[PathResdat]!)!;
+        manager.Headers = SpriteUtil.SpriteResourcesHeaderList_NewFromResdat(
+            resdat,
+            heapID,
+            manager.Collections[SpriteResource.TypeChar],
+            manager.Collections[SpriteResource.TypePltt],
+            manager.Collections[SpriteResource.TypeCell],
+            manager.Collections[SpriteResource.TypeAnim],
+            manager.Collections[SpriteResource.TypeMultiCell],
+            manager.Collections[SpriteResource.TypeMultiAnim]);
+    }
+
+    // OFFSET 0x021D30A8
+    public static void SpriteResourceManager_Free(Overlay5SpriteManager manager)
+    {
+        Sprite.SpriteList_Delete(manager.SpriteList);
+        SpriteUtil.SpriteResourcesHeaderList_Free(manager.Headers);
+        SpriteTransfer.SpriteTransfer_ResetCharTransferList(manager.Lists[SpriteResource.TypeChar]);
+        SpriteTransfer.SpriteTransfer_ResetPlttTransferList(manager.Lists[SpriteResource.TypePltt]);
+        for (int i = 0; i < manager.NumTypes; i++)
+        {
+            SpriteResourceList.SpriteResourceList_Delete(manager.Lists[i]!);
+            SpriteResourceCollection.SpriteResourceCollection_Delete(manager.Collections[i]);
+        }
+    }
+
+    // OFFSET 0x021D3104
+    public static Sprite SpriteResourceManager_CreateSprite(Overlay5SpriteManager manager, SpriteTemplateFromResourceHeader template)
+    {
+        uint[] scale = RomData.OverlayU32(OverlayField, AffineScaleTable, 3);
+        AffineSpriteListTemplate listTemplate = new();
+        listTemplate.List = manager.SpriteList;
+        listTemplate.ResourceData = manager.Headers!.Headers![template.ResourceHeaderID];
+        listTemplate.Position.X = template.X << 12;
+        listTemplate.Position.Y = template.Y << 12;
+        listTemplate.Position.Z = template.Z << 12;
+        listTemplate.AffineScale.X = (int)scale[0];
+        listTemplate.AffineScale.Y = (int)scale[1];
+        listTemplate.AffineScale.Z = (int)scale[2];
+        listTemplate.AffineZRotation = 0;
+        listTemplate.Priority = template.Priority;
+        listTemplate.VramType = template.VramType;
+        listTemplate.HeapID = manager.HeapID;
+        Sprite? sprite = Sprite.SpriteList_AddAffine(listTemplate);
+        if (sprite == null)
+        {
+            ErrorHandling.GF_AssertFail();
+        }
+        Sprite.Sprite_SetAnim(sprite!, template.AnimIdx);
+        Sprite.Sprite_SetExplicitPaletteWithOffset(sprite!, (uint)template.PlttIdx);
+        return sprite!;
+    }
+
     // OFFSET 0x021D3190
     public static void SpriteResourceManager_SetCapacities(Overlay5SpriteManager manager, uint[] capacities, int maxSprites, int heapID)
     {

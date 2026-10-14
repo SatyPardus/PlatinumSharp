@@ -630,27 +630,10 @@ public static partial class BagApplication
 
     private static ListMenuTemplate ItemListTemplate()
     {
-        byte[] raw = RomData.Overlay(Overlay, ItemListTemplateAddress, 0x20);
-        int bits = (int)BinaryPrimitives.ReadUInt32LittleEndian(raw.AsSpan(0x18));
-        return new ListMenuTemplate
-        {
-            Count = BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(0x10)),
-            MaxDisplay = BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(0x12)),
-            HeaderXOffset = raw[0x14],
-            TextXOffset = raw[0x15],
-            CursorXOffset = raw[0x16],
-            YOffset = raw[0x17],
-            TextColorFg = bits & 0xF,
-            TextColorBg = (bits >> 4) & 0xF,
-            TextColorShadow = (bits >> 8) & 0xF,
-            LetterSpacing = (bits >> 12) & 7,
-            LineSpacing = (bits >> 15) & 0xF,
-            PagerMode = (bits >> 19) & 3,
-            FontID = (bits >> 21) & 0x3F,
-            CursorType = (bits >> 27) & 1,
-            CursorCallback = ItemListCursorCallback,
-            PrintCallback = ItemListPrintCallback,
-        };
+        ListMenuTemplate template = ListMenuTemplate.FromBytes(RomData.Overlay(Overlay, ItemListTemplateAddress, 0x20));
+        template.CursorCallback = ItemListCursorCallback;
+        template.PrintCallback = ItemListPrintCallback;
+        return template;
     }
 
     // OFFSET 0x0223C224

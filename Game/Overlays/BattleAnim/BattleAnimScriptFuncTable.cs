@@ -22,7 +22,7 @@ public static partial class BattleAnimScriptFuncs
         BattleAnimScriptFunc_Submission,
         (system) => throw Missing(0x022300C4),
         (system) => throw Missing(0x022303D0),
-        (system) => throw Missing(0x0222B9E0),
+        BattleAnimScriptFunc_Growth,
         (system) => throw Missing(0x0222BAE4),
         (system) => throw Missing(0x0222BCF4),
         (system) => throw Missing(0x0222BE48),

@@ -248,25 +248,7 @@ public static class RowanIntro
 
     private static ListMenuTemplate ListMenuTemplateAt(uint address)
     {
-        byte[] raw = RomData.Overlay(Overlay, address, 0x20);
-        int spacing = Bin.U16(raw, 0x1A);
-        return new ListMenuTemplate
-        {
-            Count = (ushort)Bin.U16(raw, 0x10),
-            MaxDisplay = (ushort)Bin.U16(raw, 0x12),
-            HeaderXOffset = raw[0x14],
-            TextXOffset = raw[0x15],
-            CursorXOffset = raw[0x16],
-            YOffset = raw[0x17] & 0xF,
-            TextColorFg = raw[0x17] >> 4,
-            TextColorBg = raw[0x18] & 0xF,
-            TextColorShadow = raw[0x18] >> 4,
-            LetterSpacing = spacing & 7,
-            LineSpacing = (spacing >> 3) & 0xF,
-            PagerMode = (spacing >> 7) & 3,
-            FontID = (spacing >> 9) & 0x3F,
-            CursorType = (spacing >> 15) & 1,
-        };
+        return ListMenuTemplate.FromBytes(RomData.Overlay(Overlay, address, 0x20));
     }
 
     private static void SetBlendAlpha(int display, int plane, RowanIntroData data)

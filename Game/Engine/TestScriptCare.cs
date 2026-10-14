@@ -17,6 +17,7 @@ public sealed partial class TestScript
     private const int HealHPPercent = 50;
     private const int HealLeadHPPercent = 35;
     private const uint BattleTypeTrainerMask = 1;
+    private const int BattleHeapID = 5;
     private static readonly int[] CommandMenuIndices = { 1, 2, 3, 4, 7, 8 };
 
     private bool battleTouching;
@@ -47,6 +48,10 @@ public sealed partial class TestScript
         {
             lastBattleMenu = menu;
             battleMenuFrames = 0;
+            if (Array.IndexOf(CommandMenuIndices, menu) >= 0)
+            {
+                Log($"#   battle heap free: {Heap.HeapExp_FndGetTotalFreeSize(BattleHeapID):X} bytes");
+            }
         }
         battleMenuFrames++;
         BattleMenuConfig? config = subscreen == null || subscreen.IsPanelSliding != 0 ? null : BattleSubscreens.BattleSubscreen_TestMenuConfig(menu);

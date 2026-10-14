@@ -113,7 +113,11 @@ public sealed class ResourceCollection
         {
             ErrorHandling.GF_AssertFail();
         }
-        resource!.Data = null;
+        if (resource!.Data != null)
+        {
+            Heap.Heap_Free(resource.Data);
+            resource.Data = null;
+        }
         resource.ID = -1;
         collection!.Count--;
     }

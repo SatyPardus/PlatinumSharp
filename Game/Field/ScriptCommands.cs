@@ -64,6 +64,9 @@ public static partial class ScriptCommands
                 RegisterParty(ported);
                 RegisterMenus(ported);
                 RegisterTV(ported);
+                RegisterMoney(ported);
+                RegisterLocation(ported);
+                RegisterMart(ported);
                 sPorted = ported;
             }
             return sPorted;
